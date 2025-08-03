@@ -11,6 +11,7 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: development
 
     steps:
       - name: Checkout Code
@@ -30,5 +31,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: globoglobito/price-tracker:latest
+          tags: globoglobitos/price-tracker:latest
 
