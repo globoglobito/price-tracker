@@ -31,5 +31,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: globoglobito/price-tracker:latest
+          tags: globoglobitos/price-tracker:latest
 
