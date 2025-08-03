@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: price-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: price-tracker
+  template:
+    metadata:
+      labels:
+        app: price-tracker
+    spec:
+      containers:
+      - name: price-tracker
+        image: globoglobitos/price-tracker:latest
+        ports:
+        - containerPort: 8000
