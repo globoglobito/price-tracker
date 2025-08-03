@@ -14,6 +14,24 @@ spec:
     spec:
       containers:
       - name: price-tracker
-        image: globoglobitos/price-tracker:latest
+        image: globoglobitos/price-tracker:0.1.0
         ports:
         - containerPort: 8000
+        env:
+        - name: DB_HOST
+          value: "price-tracker-postgres-postgresql.default.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "price_tracker_db"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: price-tracker-postgres-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: price-tracker-postgres-credentials
+              key: password
+        
