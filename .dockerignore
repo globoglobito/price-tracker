@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+
+# Kubernetes (not needed in container)
+k8s/
+helm/
+
+# Scripts (not needed in container)
+scripts/
+
+# GitHub Actions (not needed in container)
+.github/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

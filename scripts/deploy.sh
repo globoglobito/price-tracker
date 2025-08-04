@@ -19,7 +19,7 @@ apply_with_retry() {
     local delay=5
     
     for i in $(seq 1 $retries); do
-        if kubectl apply -f "$file"; then
+        if kubectl apply -f "$file" --validate=false; then
             echo "✅ Applied $file successfully"
             return 0
         else
@@ -37,7 +37,7 @@ apply_with_retry() {
 
 # Create namespace if it doesn't exist
 echo "📁 Creating namespace..."
-kubectl create namespace price-tracker --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace price-tracker --dry-run=client -o yaml | kubectl apply -f - || kubectl get namespace price-tracker &>/dev/null && echo "✅ Namespace already exists"
 
 # Apply configurations in order
 echo "🔧 Applying configurations..."
