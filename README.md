@@ -107,24 +107,18 @@ python app.py
 ```
 
 ### Integration Testing
-We provide comprehensive integration tests to validate your infrastructure:
+We provide essential integration tests to validate your deployment:
 
 ```bash
-# Test WSL2 environment only
-./tests/run-tests.sh wsl2
-
-# Test without requiring deployment
-./tests/run-tests.sh --skip-deploy
-
-# Full infrastructure testing
+# Run essential tests to verify deployment
 ./tests/run-tests.sh
 ```
 
-Test suites include:
-- **WSL2 Environment**: MicroK8s, storage, networking
-- **CI/CD Pipeline**: GitHub Actions, Docker builds
-- **Infrastructure**: K8s deployments, secrets, services
-- **Database**: PostgreSQL connectivity, performance
+Tests verify:
+- **Environment**: MicroK8s running, kubectl connected
+- **Deployment**: Namespace, PostgreSQL, and application pods running
+- **Database**: PostgreSQL accessible and connectable
+- **Application**: Application healthy and running
 
 ## 📁 Project Structure
 
