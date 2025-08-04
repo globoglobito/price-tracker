@@ -57,12 +57,12 @@ spec:
           valueFrom:
             secretKeyRef:
               name: app-secrets
-              key: api-key
+              key: API_KEY
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: app-secrets
-              key: jwt-secret
+              key: JWT_SECRET
         # WSL2 optimizations
         - name: PYTHONUNBUFFERED
           value: "1"
@@ -83,6 +83,5 @@ spec:
           capabilities:
             drop:
             - ALL
-        # No health checks for simple Python app
 
 # Service removed - not needed for simple Python app

@@ -38,24 +38,21 @@ echo -e "${YELLOW}🚀 Starting Simple Integration Tests${NC}"
 echo "====================================="
 echo ""
 
-# Use microk8s kubectl for all operations
-KUBECTL="microk8s kubectl"
-
 # Essential environment tests
 run_test "MicroK8s is running" "microk8s status --wait-ready --timeout 30 &>/dev/null"
-run_test "kubectl can connect" "$KUBECTL cluster-info &>/dev/null"
+run_test "kubectl can connect" "kubectl cluster-info &>/dev/null"
 
 # Essential deployment tests
-run_test "Namespace exists" "$KUBECTL get namespace price-tracker &>/dev/null"
-run_test "PostgreSQL pod is running" "$KUBECTL get pod -l app=postgres -n price-tracker | grep -q Running"
-run_test "Application pod is running" "$KUBECTL get pod -l app=price-tracker -n price-tracker | grep -q Running"
+run_test "Namespace exists" "kubectl get namespace price-tracker &>/dev/null"
+run_test "PostgreSQL pod is running" "kubectl get pod -l app=postgres -n price-tracker | grep -q Running"
+run_test "Application pod is running" "kubectl get pod -l app=price-tracker -n price-tracker | grep -q Running"
 
 # Essential database tests
-run_test "Database is accessible" "$KUBECTL exec -n price-tracker deployment/postgres -- pg_isready -U admin -d price_tracker_db &>/dev/null"
-run_test "Can connect to database" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U admin -d price_tracker_db -c 'SELECT 1;' &>/dev/null"
+run_test "Database is accessible" "kubectl exec -n price-tracker deployment/postgres -- pg_isready -U admin -d price_tracker_db &>/dev/null"
+run_test "Can connect to database" "kubectl exec -n price-tracker deployment/postgres -- psql -U admin -d price_tracker_db -c 'SELECT 1;' &>/dev/null"
 
 # Essential application tests
-run_test "Application is healthy" "$KUBECTL logs -l app=price-tracker -n price-tracker | grep -q 'Heartbeat'"
+run_test "Application can connect to database" "kubectl logs -l app=price-tracker -n price-tracker | grep -q 'Database connection successful'"
 
 echo ""
 echo "====================================="
