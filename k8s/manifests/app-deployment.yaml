@@ -1,1 +1,120 @@
-# App Deployment
+# App Deployment (Alternative - for pure K8s deployment without Helm)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: price-tracker-app
+  labels:
+    app: price-tracker
+    version: v1
+    project: price-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: price-tracker
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: price-tracker
+        version: v1
+        project: price-tracker
+    spec:
+      # Use image pull secret for Docker Hub
+      imagePullSecrets:
+      - name: docker-registry-secret
+      containers:
+      - name: price-tracker
+        image: globoglobitos/price-tracker:latest
+        imagePullPolicy: Always  # For development
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Database connection - using pure K8s PostgreSQL service
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "price_tracker_db"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: price-tracker-postgres-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: price-tracker-postgres-credentials
+              key: password
+        # Application configuration
+        - name: ENVIRONMENT
+          value: "development"
+        - name: LOG_LEVEL
+          value: "INFO"
+        # Application secrets
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: api-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: jwt-secret
+        # WSL2 optimizations
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        # Security context for WSL2
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        # Health checks - use TCP for now, switch to HTTP when app is ready
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: price-tracker-app-service
+  labels:
+    app: price-tracker
+    project: price-tracker
+spec:
+  selector:
+    app: price-tracker
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  type: NodePort

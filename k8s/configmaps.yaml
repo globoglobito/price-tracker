@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: price-tracker-init-scripts
+  labels:
+    app: postgres
+data:
+  init.sql: |
+    -- Price Tracker Database Initialization Script
+    
+    -- Create extension for UUID generation
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    
+    -- Create tables for price tracking
+    CREATE TABLE IF NOT EXISTS products (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) NOT NULL,
+        url TEXT NOT NULL,
+        selector VARCHAR(500) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS price_history (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+        price DECIMAL(10, 2) NOT NULL,
+        currency VARCHAR(3) DEFAULT 'USD',
+        scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        source_url TEXT,
+        CONSTRAINT price_positive CHECK (price >= 0)
+    );
+    
+    -- Create indexes for better performance
+    CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);
+    CREATE INDEX IF NOT EXISTS idx_price_history_scraped_at ON price_history(scraped_at);
+    CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at);
+    
+    -- Create a view for latest prices
+    CREATE OR REPLACE VIEW latest_prices AS
+    SELECT 
+        p.id as product_id,
+        p.name,
+        p.url,
+        ph.price,
+        ph.currency,
+        ph.scraped_at
+    FROM products p
+    JOIN price_history ph ON p.id = ph.product_id
+    WHERE ph.scraped_at = (
+        SELECT MAX(scraped_at) 
+        FROM price_history ph2 
+        WHERE ph2.product_id = p.id
+    );
+    
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO price_tracker_user;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO price_tracker_user;
+    GRANT USAGE ON SCHEMA public TO price_tracker_user;
