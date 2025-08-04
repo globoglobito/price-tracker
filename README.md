@@ -5,12 +5,13 @@ A comprehensive price tracking application built with modern DevOps practices, d
 ## 🏗️ Architecture
 
 - **Frontend**: TBD (React/Vue.js planned)  
-- **Backend**: TBD (Node.js/Python planned)
+- **Backend**: Simple Python application (PostgreSQL connectivity demo)
 - **Database**: PostgreSQL (Bitnami Helm chart)
 - **Container Registry**: Docker Hub
 - **Orchestration**: Kubernetes (MicroK8s)
 - **CI/CD**: GitHub Actions
 - **Environment**: WSL2 + Ubuntu
+- **Python**: 3.11+ with virtual environment
 
 ## 🚀 Quick Start (Fresh WSL2 Environment)
 
@@ -39,32 +40,40 @@ Before deploying anything, you must create all required Kubernetes secrets:
 
 📖 **[Follow the complete secrets setup guide](docs/SECRETS.md)**
 
-Quick commands (replace with your actual values):
+Quick commands (replace ALL placeholders with your actual values):
 ```bash
 # Create namespace
 kubectl create namespace price-tracker
 
 # Create all 4 required secrets (see docs/SECRETS.md for details)
-kubectl create secret generic postgres-secret --from-literal=POSTGRES_USER=price_tracker_user --from-literal=POSTGRES_PASSWORD=your_password --from-literal=POSTGRES_DB=price_tracker_db -n price-tracker
-kubectl create secret generic app-secrets --from-literal=DATABASE_URL=postgresql://price_tracker_user:your_password@postgres-service:5432/price_tracker_db --from-literal=JWT_SECRET=$(openssl rand -base64 32) --from-literal=API_KEY=placeholder -n price-tracker
-kubectl create secret docker-registry docker-registry-secret --docker-server=https://index.docker.io/v1/ --docker-username=your_username --docker-password=your_password --docker-email=your_email -n price-tracker
-kubectl create secret generic price-tracker-postgres-credentials --from-literal=postgres-password=your_password --from-literal=password=your_password -n price-tracker
-```
+kubectl create secret generic postgres-secret --from-literal=POSTGRES_USER=admin --from-literal=POSTGRES_PASSWORD=YOUR_SECURE_PASSWORD --from-literal=POSTGRES_DB=price_tracker_db -n price-tracker
+kubectl create secret generic app-secrets --from-literal=DATABASE_URL=postgresql://admin:YOUR_SECURE_PASSWORD@postgres-service:5432/price_tracker_db --from-literal=JWT_SECRET=$(openssl rand -base64 32) --from-literal=API_KEY=YOUR_API_KEY -n price-tracker
+kubectl create secret docker-registry docker-registry-secret --docker-server=https://index.docker.io/v1/ --docker-username=YOUR_DOCKERHUB_USERNAME --docker-password=YOUR_DOCKERHUB_TOKEN --docker-email=YOUR_EMAIL -n price-tracker
+kubectl create secret generic price-tracker-postgres-credentials --from-literal=username=admin --from-literal=password=YOUR_SECURE_PASSWORD -n price-tracker
 
-### 3. Deploy Infrastructure
+### 3. Setup Python Environment
 ```bash
 # Clone repository
 git clone https://github.com/globoglobito/price-tracker.git
 cd price-tracker
 
+# Install Python dependencies
+sudo apt install python3.12-venv libpq-dev -y
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
 # Make scripts executable
 chmod +x scripts/*.sh tests/*.sh
+```
 
+### 4. Deploy Infrastructure
+```bash
 # Deploy all infrastructure
 ./scripts/deploy.sh
 ```
 
-### 4. Verify Deployment
+### 5. Verify Deployment
 ```bash
 # Run comprehensive integration tests
 ./tests/run-tests.sh
@@ -76,8 +85,28 @@ kubectl get all -n price-tracker
 kubectl port-forward service/price-tracker-service 8080:80 -n price-tracker
 ```
 
-## 🧪 Testing
+## 🧪 Testing & Local Development
 
+### Local Application Testing
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Set environment variables for local testing
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=price_tracker_db
+export DB_USER=admin
+export DB_PASSWORD=YOUR_SECURE_PASSWORD
+
+# Port-forward PostgreSQL for local access
+kubectl port-forward service/price-tracker-postgres-postgresql 5432:5432 &
+
+# Run the simple database connectivity test
+python app.py
+```
+
+### Integration Testing
 We provide comprehensive integration tests to validate your infrastructure:
 
 ```bash

@@ -28,9 +28,7 @@ spec:
       - name: price-tracker
         image: globoglobitos/price-tracker:latest
         imagePullPolicy: Always  # For development
-        ports:
-        - containerPort: 8000
-          name: http
+        # No ports needed for simple Python app
         env:
         # Database connection - using pure K8s PostgreSQL service
         - name: DB_HOST
@@ -85,36 +83,6 @@ spec:
           capabilities:
             drop:
             - ALL
-        # Health checks - use TCP for now, switch to HTTP when app is ready
-        livenessProbe:
-          tcpSocket:
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          tcpSocket:
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
+        # No health checks for simple Python app
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: price-tracker-app-service
-  labels:
-    app: price-tracker
-    project: price-tracker
-spec:
-  selector:
-    app: price-tracker
-  ports:
-  - name: http
-    port: 80
-    targetPort: 8000
-    protocol: TCP
-  type: NodePort
+# Service removed - not needed for simple Python app

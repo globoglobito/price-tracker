@@ -28,10 +28,7 @@ spec:
               name: postgres-config
               key: POSTGRES_DB
         - name: POSTGRES_USER
-          valueFrom:
-            configMapKeyRef:
-              name: postgres-config
-              key: POSTGRES_USER
+          value: "admin"
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -57,7 +54,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - price_tracker_user
+            - admin
             - -d
             - price_tracker_db
           initialDelaySeconds: 30
@@ -67,7 +64,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - price_tracker_user
+            - admin
             - -d
             - price_tracker_db
           initialDelaySeconds: 5
