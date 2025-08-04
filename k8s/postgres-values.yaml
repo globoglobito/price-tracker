@@ -1,0 +1,29 @@
+# Alternative PostgreSQL values for direct K8s deployment
+# This can be used if not using Helm
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: price_tracker_db
+  POSTGRES_USER: price_tracker_user
+  POSTGRES_PASSWORD: price_tracker_password
+  PGDATA: /var/lib/postgresql/data/pgdata
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: microk8s-hostpath
