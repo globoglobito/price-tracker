@@ -2,21 +2,22 @@
 
 All notable changes to this project will be documented here.
 
-## [v0.2.0] - 2025-08-04
+## [v0.1.0] - 2025-08-04
 
 ### ✨ Features
+- **Initial Project Structure**: Basic folder structure and configuration files
 - **Kubernetes Secrets Management**: Complete secrets integration for PostgreSQL, Docker Hub, and application credentials
 - **WSL2 Optimization**: Performance-tuned configurations for WSL2 + MicroK8s environment
 - **Multi-Deployment Options**: Support for both Helm and pure Kubernetes deployments
 - **Enhanced CI/CD**: Multi-architecture Docker builds with GitHub Actions caching
 
 ### 🔐 Security
+- **Removed Hardcoded Passwords**: All credentials now use Kubernetes secrets
 - **Container Security**: Non-root containers with minimal privileges and security contexts
 - **Image Pull Secrets**: Secure Docker Hub authentication for private repositories
 
 ### 🛠️ Infrastructure
 - **PostgreSQL Helm Integration**: Bitnami PostgreSQL chart with secrets-based configuration
-- **Database Initialization**: Automated schema creation with proper indexes and views
 - **Storage Optimization**: WSL2-optimized persistent volumes with proper permissions
 - **Network Security**: ClusterIP services with DNS-based service discovery
 
@@ -27,6 +28,7 @@ All notable changes to this project will be documented here.
 - **Deployment Scripts**: Automated deployment with environment validation
 
 ### 🧹 Maintenance
+- **Removed PowerShell Dependencies**: Streamlined to bash-only scripts for WSL2 focus
 - **Enhanced Error Handling**: Better retry logic and validation in deployment scripts
 - **Improved File Structure**: Organized configurations with clear separation of concerns
 
@@ -40,9 +42,5 @@ All notable changes to this project will be documented here.
 - Enhanced GitHub Actions with multi-arch builds (amd64, arm64)
 - Optimized PostgreSQL configuration for WSL2 resource constraints
 - Implemented proper health checks and resource limits for all containers
-
-## [v0.1.0] - 2025-08-04
-- Initial project folder structure added
-- Added `CHANGELOG.md` to track project changes
-- Basic Docker and Kubernetes configurations
+- Docker images: `globoglobitos/price-tracker:latest`, `globoglobitos/price-tracker:0.1.0`
 
