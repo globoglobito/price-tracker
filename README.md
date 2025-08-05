@@ -35,21 +35,21 @@ newgrp microk8s
 microk8s status --wait-ready
 ```
 
-### 2. **CRITICAL: Create Secrets First**
-Before deploying anything, you must create all required Kubernetes secrets:
+### 2. **🔐 Setup Secrets (Interactive)**
+Before deploying, you need to create Kubernetes secrets. We provide an interactive script to make this easy:
 
-📖 **[Follow the complete secrets setup guide](docs/SECRETS.md)**
-
-Quick commands (replace ALL placeholders with your actual values):
 ```bash
-# Create namespace
-kubectl create namespace price-tracker
+# Run the interactive secrets setup script
+./scripts/setup-secrets.sh
+```
 
-# Create all 4 required secrets (see docs/SECRETS.md for details)
-kubectl create secret generic postgres-secret --from-literal=POSTGRES_USER=admin --from-literal=POSTGRES_PASSWORD=YOUR_SECURE_PASSWORD --from-literal=POSTGRES_DB=price_tracker_db -n price-tracker
-kubectl create secret generic app-secrets --from-literal=DATABASE_URL=postgresql://admin:YOUR_SECURE_PASSWORD@postgres-service:5432/price_tracker_db --from-literal=JWT_SECRET=$(openssl rand -base64 32) --from-literal=API_KEY=YOUR_API_KEY -n price-tracker
-kubectl create secret docker-registry docker-registry-secret --docker-server=https://index.docker.io/v1/ --docker-username=YOUR_DOCKERHUB_USERNAME --docker-password=YOUR_DOCKERHUB_TOKEN --docker-email=YOUR_EMAIL -n price-tracker
-kubectl create secret generic price-tracker-postgres-credentials --from-literal=username=admin --from-literal=password=YOUR_SECURE_PASSWORD -n price-tracker
+The script will prompt you for:
+- **Database password** (required)
+- **Docker Hub credentials** (username, password/token, email)
+- **API key** (optional, defaults to test value)
+- **JWT secret** (optional, auto-generated if not provided)
+
+📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
 ### 3. Setup Python Environment
 ```bash
@@ -127,6 +127,9 @@ price-tracker/
 ├── .github/workflows/     # GitHub Actions CI/CD
 ├── docs/                  # Documentation
 │   └── SECRETS.md        # Secrets setup guide
+├── scripts/               # Deployment and utility scripts
+│   ├── deploy.sh         # Main deployment script
+│   └── setup-secrets.sh  # Interactive secrets setup
 ├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
 │   ├── secrets.yaml      # Secret templates (for reference)
@@ -142,6 +145,7 @@ price-tracker/
 ## 🔐 Security Features
 
 - **No Hardcoded Secrets**: All credentials via K8s secrets
+- **Interactive Setup**: Secure secrets creation with `./scripts/setup-secrets.sh`
 - **Non-root Containers**: Security contexts for all deployments
 - **Resource Limits**: Memory and CPU constraints
 - **Image Pull Secrets**: Secure Docker Hub access
