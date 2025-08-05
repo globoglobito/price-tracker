@@ -100,7 +100,7 @@ export DB_USER=admin
 export DB_PASSWORD=YOUR_SECURE_PASSWORD
 
 # Port-forward PostgreSQL for local access
-kubectl port-forward service/price-tracker-postgres-postgresql 5432:5432 &
+kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
 
 # Run the simple database connectivity test
 python app.py
@@ -132,13 +132,18 @@ price-tracker/
 │   └── setup-secrets.sh  # Interactive secrets setup
 ├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
-│   ├── secrets.yaml      # Secret templates (for reference)
 │   ├── configmaps.yaml   # Application configuration
-│   ├── deployment.yaml   # Main application deployment
+│   ├── postgres-values.yaml # PostgreSQL configuration
 │   ├── service.yaml      # Kubernetes services
-│   └── manifests/        # Alternative deployment configs
-├── scripts/               # Deployment and utility scripts
+│   └── manifests/        # Deployment configs
+│       ├── app-deployment.yaml # Application deployment
+│       └── db-deployment.yaml  # Database deployment
 ├── tests/                 # Integration test suites
+│   ├── run-tests.sh      # Main test runner
+│   └── test-simple.sh    # Simple test suite
+├── app.py                 # Main Python application
+├── Dockerfile            # Container configuration
+├── requirements.txt      # Python dependencies
 └── CHANGELOG.md          # Version history
 ```
 
@@ -162,7 +167,7 @@ price-tracker/
 ./tests/run-tests.sh --skip-deploy
 
 # View logs
-kubectl logs -f deployment/price-tracker -n price-tracker
+kubectl logs -f deployment/price-tracker-app -n price-tracker
 ```
 
 ### CI/CD Pipeline
@@ -178,7 +183,7 @@ kubectl logs -f deployment/price-tracker -n price-tracker
 kubectl get pods -n price-tracker -w
 
 # View application logs
-kubectl logs -f deployment/price-tracker -n price-tracker
+kubectl logs -f deployment/price-tracker-app -n price-tracker
 
 # Database logs
 kubectl logs -f deployment/postgres -n price-tracker
@@ -195,7 +200,7 @@ kubectl top pods -n price-tracker
 git pull origin main
 
 # Redeploy
-kubectl rollout restart deployment/price-tracker -n price-tracker
+kubectl rollout restart deployment/price-tracker-app -n price-tracker
 
 # Monitor rollout
 kubectl rollout status deployment/price-tracker -n price-tracker
