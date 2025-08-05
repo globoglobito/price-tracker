@@ -35,21 +35,19 @@ newgrp microk8s
 microk8s status --wait-ready
 ```
 
-### 2. **CRITICAL: Create Secrets First**
-Before deploying anything, you must create all required Kubernetes secrets:
+### 2. **🔐 Setup Secrets (Interactive)**
+Before deploying, you need to create Kubernetes secrets. We provide an interactive script to make this easy:
 
-📖 **[Follow the complete secrets setup guide](docs/SECRETS.md)**
-
-Quick commands (replace ALL placeholders with your actual values):
 ```bash
-# Create namespace
-kubectl create namespace price-tracker
+# Run the interactive secrets setup script
+./scripts/setup-secrets.sh
+```
 
-# Create all 4 required secrets (see docs/SECRETS.md for details)
-kubectl create secret generic postgres-secret --from-literal=POSTGRES_USER=admin --from-literal=POSTGRES_PASSWORD=YOUR_SECURE_PASSWORD --from-literal=POSTGRES_DB=price_tracker_db -n price-tracker
-kubectl create secret generic app-secrets --from-literal=DATABASE_URL=postgresql://admin:YOUR_SECURE_PASSWORD@postgres-service:5432/price_tracker_db --from-literal=JWT_SECRET=$(openssl rand -base64 32) --from-literal=API_KEY=YOUR_API_KEY -n price-tracker
-kubectl create secret docker-registry docker-registry-secret --docker-server=https://index.docker.io/v1/ --docker-username=YOUR_DOCKERHUB_USERNAME --docker-password=YOUR_DOCKERHUB_TOKEN --docker-email=YOUR_EMAIL -n price-tracker
-kubectl create secret generic price-tracker-postgres-credentials --from-literal=username=admin --from-literal=password=YOUR_SECURE_PASSWORD -n price-tracker
+The script will prompt you for:
+- **Database password** (required)
+- **Docker Hub credentials** (username, password/token, email)
+
+📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
 ### 3. Setup Python Environment
 ```bash
@@ -100,7 +98,7 @@ export DB_USER=admin
 export DB_PASSWORD=YOUR_SECURE_PASSWORD
 
 # Port-forward PostgreSQL for local access
-kubectl port-forward service/price-tracker-postgres-postgresql 5432:5432 &
+kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
 
 # Run the simple database connectivity test
 python app.py
@@ -127,21 +125,30 @@ price-tracker/
 ├── .github/workflows/     # GitHub Actions CI/CD
 ├── docs/                  # Documentation
 │   └── SECRETS.md        # Secrets setup guide
+├── scripts/               # Deployment and utility scripts
+│   ├── deploy.sh         # Main deployment script
+│   └── setup-secrets.sh  # Interactive secrets setup
 ├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
-│   ├── secrets.yaml      # Secret templates (for reference)
 │   ├── configmaps.yaml   # Application configuration
-│   ├── deployment.yaml   # Main application deployment
+│   ├── postgres-values.yaml # PostgreSQL configuration
 │   ├── service.yaml      # Kubernetes services
-│   └── manifests/        # Alternative deployment configs
-├── scripts/               # Deployment and utility scripts
+│   └── manifests/        # Deployment configs
+│       ├── app-deployment.yaml # Application deployment
+│       └── db-deployment.yaml  # Database deployment
 ├── tests/                 # Integration test suites
+│   ├── run-tests.sh      # Main test runner
+│   └── test-simple.sh    # Simple test suite
+├── app.py                 # Main Python application
+├── Dockerfile            # Container configuration
+├── requirements.txt      # Python dependencies
 └── CHANGELOG.md          # Version history
 ```
 
 ## 🔐 Security Features
 
 - **No Hardcoded Secrets**: All credentials via K8s secrets
+- **Interactive Setup**: Secure secrets creation with `./scripts/setup-secrets.sh`
 - **Non-root Containers**: Security contexts for all deployments
 - **Resource Limits**: Memory and CPU constraints
 - **Image Pull Secrets**: Secure Docker Hub access
@@ -158,7 +165,7 @@ price-tracker/
 ./tests/run-tests.sh --skip-deploy
 
 # View logs
-kubectl logs -f deployment/price-tracker -n price-tracker
+kubectl logs -f deployment/price-tracker-app -n price-tracker
 ```
 
 ### CI/CD Pipeline
@@ -174,7 +181,7 @@ kubectl logs -f deployment/price-tracker -n price-tracker
 kubectl get pods -n price-tracker -w
 
 # View application logs
-kubectl logs -f deployment/price-tracker -n price-tracker
+kubectl logs -f deployment/price-tracker-app -n price-tracker
 
 # Database logs
 kubectl logs -f deployment/postgres -n price-tracker
@@ -191,7 +198,7 @@ kubectl top pods -n price-tracker
 git pull origin main
 
 # Redeploy
-kubectl rollout restart deployment/price-tracker -n price-tracker
+kubectl rollout restart deployment/price-tracker-app -n price-tracker
 
 # Monitor rollout
 kubectl rollout status deployment/price-tracker -n price-tracker

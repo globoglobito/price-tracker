@@ -64,4 +64,5 @@ logs/
 
 # Kubernetes secrets (if any local ones)
 *.secret
-secrets.local.yaml 
+secrets.local.yaml
+k8s/secrets.yaml 
