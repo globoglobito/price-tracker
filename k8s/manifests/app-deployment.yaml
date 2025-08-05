@@ -52,17 +52,7 @@ spec:
           value: "development"
         - name: LOG_LEVEL
           value: "INFO"
-        # Application secrets
-        - name: API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: API_KEY
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: JWT_SECRET
+
         # WSL2 optimizations
         - name: PYTHONUNBUFFERED
           value: "1"

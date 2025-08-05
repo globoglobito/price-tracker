@@ -46,8 +46,6 @@ Before deploying, you need to create Kubernetes secrets. We provide an interacti
 The script will prompt you for:
 - **Database password** (required)
 - **Docker Hub credentials** (username, password/token, email)
-- **API key** (optional, defaults to test value)
-- **JWT secret** (optional, auto-generated if not provided)
 
 📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
