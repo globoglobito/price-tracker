@@ -33,6 +33,12 @@ newgrp microk8s
 
 # Verify installation
 microk8s status --wait-ready
+
+# Create kubectl alias (recommended for easier usage)
+sudo snap alias microk8s.kubectl kubectl
+
+# Verify kubectl works
+kubectl cluster-info
 ```
 
 ### 2. **🔐 Setup Secrets (Interactive)**
@@ -226,10 +232,11 @@ kubectl scale deployment price-tracker --replicas=1 -n price-tracker
 
 ### Common Issues
 
-1. **Secrets not found**: Ensure all 4 secrets are created (see [docs/SECRETS.md](docs/SECRETS.md))
-2. **Pods pending**: Check storage and resource availability
-3. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`
-4. **Database connection**: Check PostgreSQL pod status and secrets
+1. **kubectl not found/connection refused**: Make sure you've created the alias with `sudo snap alias microk8s.kubectl kubectl` or use `microk8s kubectl` instead
+2. **Secrets not found**: Ensure all 4 secrets are created (see [docs/SECRETS.md](docs/SECRETS.md))
+3. **Pods pending**: Check storage and resource availability
+4. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`
+5. **Database connection**: Check PostgreSQL pod status and secrets
 
 ### Useful Commands
 ```bash
