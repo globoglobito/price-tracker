@@ -57,10 +57,15 @@ echo -e "${GREEN}✅ Secrets found${NC}"
 
 # Step 4: Deploy database
 echo -e "${YELLOW}🗄️  Deploying database...${NC}"
-$KUBECTL apply -f k8s/configmaps.yaml
-$KUBECTL apply -f k8s/postgres-values.yaml
-$KUBECTL apply -f k8s/manifests/db-deployment.yaml
-$KUBECTL apply -f k8s/service.yaml
+$KUBECTL apply -f k8s/configmaps.yaml -n price-tracker
+$KUBECTL apply -f k8s/postgres-values.yaml -n price-tracker
+$KUBECTL apply -f k8s/manifests/db-deployment.yaml -n price-tracker
+
+# Verify database deployment was created
+if ! $KUBECTL get deployment postgres -n price-tracker &>/dev/null; then
+    echo -e "${RED}❌ Database deployment failed to create${NC}"
+    exit 1
+fi
 
 # Wait for database to be ready
 echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
@@ -74,8 +79,14 @@ echo -e "${GREEN}✅ Database migration applied${NC}"
 
 # Step 6: Deploy API
 echo -e "${YELLOW}🚀 Deploying API...${NC}"
-$KUBECTL apply -f k8s/api-deployment.yaml
-$KUBECTL apply -f k8s/api-service.yaml
+$KUBECTL apply -f k8s/api-deployment.yaml -n price-tracker
+$KUBECTL apply -f k8s/api-service.yaml -n price-tracker
+
+# Verify API deployment was created
+if ! $KUBECTL get deployment price-tracker-api -n price-tracker &>/dev/null; then
+    echo -e "${RED}❌ API deployment failed to create${NC}"
+    exit 1
+fi
 
 # Wait for API to be ready
 echo -e "${YELLOW}⏳ Waiting for API to be ready...${NC}"

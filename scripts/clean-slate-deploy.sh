@@ -24,6 +24,11 @@ echo -e "${YELLOW}🧹 Cleaning up existing resources...${NC}"
 $KUBECTL delete deployment price-tracker-api -n price-tracker --ignore-not-found=true
 $KUBECTL delete service price-tracker-api-service -n price-tracker --ignore-not-found=true
 
+# Delete old app resources
+$KUBECTL delete deployment price-tracker-app -n price-tracker --ignore-not-found=true
+$KUBECTL delete service price-tracker-service -n price-tracker --ignore-not-found=true
+$KUBECTL delete service price-tracker-api-service -n price-tracker --ignore-not-found=true
+
 # Delete database resources
 $KUBECTL delete deployment postgres -n price-tracker --ignore-not-found=true
 $KUBECTL delete service postgres-service -n price-tracker --ignore-not-found=true

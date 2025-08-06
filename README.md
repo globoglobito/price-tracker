@@ -4,14 +4,20 @@ A comprehensive price tracking application built with modern DevOps practices, d
 
 ## 🏗️ Architecture
 
+### Image Strategy
+- **Database**: `postgres:15-alpine` (official PostgreSQL image)
+- **API**: `globoglobitos/price-tracker-api:latest` (custom FastAPI application)
+- **Future Scrapers**: `globoglobitos/price-tracker-scraper:latest` (custom scraper pods)
+
+### Components
 - **Frontend**: TBD (React/Vue.js planned)  
-- **Backend**: Simple Python application (PostgreSQL connectivity demo)
-- **Database**: PostgreSQL (Bitnami Helm chart)
+- **Backend**: FastAPI Search API (PostgreSQL connectivity)
+- **Database**: PostgreSQL (official image with custom schema)
 - **Container Registry**: Docker Hub
 - **Orchestration**: Kubernetes (MicroK8s)
 - **CI/CD**: GitHub Actions
 - **Environment**: WSL2 + Ubuntu
-- **Python**: 3.11+ with virtual environment
+- **Python**: 3.12+ with virtual environment
 
 ## 🚀 Quick Start (Fresh WSL2 Environment)
 
@@ -194,8 +200,8 @@ kubectl logs -f deployment/price-tracker-app -n price-tracker
 # Check application health
 kubectl get pods -n price-tracker -w
 
-# View application logs
-kubectl logs -f deployment/price-tracker-app -n price-tracker
+# View API logs
+kubectl logs -f deployment/price-tracker-api -n price-tracker
 
 # Database logs
 kubectl logs -f deployment/postgres -n price-tracker
@@ -220,11 +226,11 @@ kubectl top pods -n price-tracker
 # Pull latest changes
 git pull origin main
 
-# Redeploy
-kubectl rollout restart deployment/price-tracker-app -n price-tracker
+# Redeploy API
+kubectl rollout restart deployment/price-tracker-api -n price-tracker
 
 # Monitor rollout
-kubectl rollout status deployment/price-tracker -n price-tracker
+kubectl rollout status deployment/price-tracker-api -n price-tracker
 ```
 
 ### Backup Database
@@ -238,11 +244,11 @@ kubectl exec -i deployment/postgres -n price-tracker -- psql -U price_tracker_us
 
 ### Scale Application
 ```bash
-# Scale up
-kubectl scale deployment price-tracker --replicas=3 -n price-tracker
+# Scale up API
+kubectl scale deployment price-tracker-api --replicas=3 -n price-tracker
 
-# Scale down
-kubectl scale deployment price-tracker --replicas=1 -n price-tracker
+# Scale down API
+kubectl scale deployment price-tracker-api --replicas=1 -n price-tracker
 ```
 
 ## 🐛 Troubleshooting
@@ -252,7 +258,7 @@ kubectl scale deployment price-tracker --replicas=1 -n price-tracker
 1. **kubectl not found/connection refused**: Make sure you've created the alias with `sudo snap alias microk8s.kubectl kubectl` or use `microk8s kubectl` instead
 2. **Secrets not found**: Ensure all 4 secrets are created (see [docs/SECRETS.md](docs/SECRETS.md))
 3. **Pods pending**: Check storage and resource availability
-4. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`
+4. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`. API image: `globoglobitos/price-tracker-api:latest`
 5. **Database connection**: Check PostgreSQL pod status and secrets
 
 ### Useful Commands
