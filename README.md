@@ -77,16 +77,24 @@ chmod +x scripts/*.sh tests/*.sh
 ./scripts/deploy.sh
 ```
 
-### 5. Verify Deployment
+### 5. Deploy Search API (Optional)
+```bash
+# Deploy the FastAPI Search API (images built via GitHub Actions)
+microk8s kubectl apply -f k8s/api-deployment.yaml
+microk8s kubectl apply -f k8s/api-service.yaml
+```
+
+### 6. Verify Deployment
 ```bash
 # Run comprehensive integration tests
-./tests/run-tests.sh
+./database/test_integration.sh
 
 # Check deployment status
 kubectl get all -n price-tracker
 
-# Access application (when ready)
-kubectl port-forward service/price-tracker-service 8080:80 -n price-tracker
+# Access applications
+# - Original app: kubectl port-forward service/price-tracker-service 8080:80 -n price-tracker
+# - Search API: http://localhost:30080/health
 ```
 
 ## 🧪 Testing & Local Development
@@ -197,6 +205,15 @@ kubectl top pods -n price-tracker
 ```
 
 ## 🔄 Common Operations
+
+### Complete Deployment (Recommended)
+```bash
+# Clean slate deployment - removes everything and redeploys
+./scripts/clean-slate-deploy.sh
+
+# Or step-by-step deployment
+./scripts/deploy-complete.sh
+```
 
 ### Update Application
 ```bash
