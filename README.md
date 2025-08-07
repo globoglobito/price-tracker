@@ -121,7 +121,7 @@ export DB_PASSWORD=YOUR_SECURE_PASSWORD
 kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
 
 # Run the simple database connectivity test
-python app.py
+# API is deployed in Kubernetes - see deployment section
 ```
 
 ### Integration Testing
@@ -129,14 +129,13 @@ We provide essential integration tests to validate your deployment:
 
 ```bash
 # Run essential tests to verify deployment
-./tests/run-tests.sh
+./database/test_integration.sh && ./api/test_api_integration.sh
 ```
 
 Tests verify:
-- **Environment**: MicroK8s running, kubectl connected
-- **Deployment**: Namespace, PostgreSQL, and application pods running
-- **Database**: PostgreSQL accessible and connectable
-- **Application**: Application healthy and running
+- **Database**: Schema, tables, constraints, data operations (20 tests)
+- **API**: Health endpoints, CRUD operations, error handling (15 tests)
+- **Integration**: Full system connectivity and functionality
 
 ## 📁 Project Structure
 
@@ -146,20 +145,23 @@ price-tracker/
 ├── docs/                  # Documentation
 │   └── SECRETS.md        # Secrets setup guide
 ├── scripts/               # Deployment and utility scripts
-│   ├── deploy.sh         # Main deployment script
+│   ├── deploy-complete.sh # Complete deployment script
+│   ├── clean-slate-deploy.sh # Clean slate deployment
 │   └── setup-secrets.sh  # Interactive secrets setup
 ├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
-│   ├── configmaps.yaml   # Application configuration
+│   ├── api-deployment.yaml # API deployment
+│   ├── api-service.yaml   # API service
 │   ├── postgres-values.yaml # PostgreSQL configuration
-│   ├── service.yaml      # Kubernetes services
 │   └── manifests/        # Deployment configs
-│       ├── app-deployment.yaml # Application deployment
 │       └── db-deployment.yaml  # Database deployment
-├── tests/                 # Integration test suites
-│   ├── run-tests.sh      # Main test runner
-│   └── test-simple.sh    # Simple test suite
-├── app.py                 # Main Python application
+├── database/              # Database schema and tests
+│   ├── migrations/       # Database migrations
+│   ├── test_integration.sh # Database integration tests
+│   └── README.md         # Database documentation
+├── api/                   # FastAPI Search API
+│   ├── test_api_integration.sh # API integration tests
+│   └── README.md         # API documentation
 ├── Dockerfile            # Container configuration
 ├── requirements.txt      # Python dependencies
 └── CHANGELOG.md          # Version history
@@ -179,13 +181,13 @@ price-tracker/
 ### Local Development (WSL2)
 ```bash
 # Start development environment
-./scripts/deploy.sh
+./scripts/deploy-complete.sh
 
 # Run tests during development
-./tests/run-tests.sh --skip-deploy
+./database/test_integration.sh && ./api/test_api_integration.sh
 
 # View logs
-kubectl logs -f deployment/price-tracker-app -n price-tracker
+kubectl logs -f deployment/price-tracker-api -n price-tracker
 ```
 
 ### CI/CD Pipeline
@@ -279,7 +281,7 @@ kubectl delete namespace price-tracker
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run integration tests: `./tests/run-tests.sh`
+4. Run integration tests: `./database/test_integration.sh` and `./api/test_api_integration.sh`
 5. Submit a pull request
 
 ## 📖 Documentation

@@ -69,7 +69,7 @@ microk8s kubectl port-forward service/postgres-service 5432:5432 -n price-tracke
 
 #### 4. Run the API
 ```bash
-python run_api.py
+# API is deployed in Kubernetes - see main README for deployment instructions
 ```
 
 Or with uvicorn:
