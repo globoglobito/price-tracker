@@ -5,17 +5,14 @@ metadata:
   name: price-tracker
 
 # Namespace
-namespace: default
+namespace: price-tracker
 
 # Resources to include
 resources:
-  - secrets.yaml
   - configmaps.yaml
-  - postgres-values.yaml
-  - deployment.yaml
-  - service.yaml
   - manifests/db-deployment.yaml
-  - manifests/app-deployment.yaml
+  - api-deployment.yaml
+  - api-service.yaml
   - cronjob-scraper.yaml
 
 # Common labels applied to all resources
@@ -23,10 +20,10 @@ commonLabels:
   project: price-tracker
   environment: development
 
-# Images to replace (useful for different environments)
-images:
-  - name: globoglobitos/price-tracker
-    newTag: latest
+# Images to replace (not used currently)
+# images:
+#   - name: globoglobitos/price-tracker
+#     newTag: latest
 
 # ConfigMap generator for environment-specific configs
 configMapGenerator:
