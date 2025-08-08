@@ -59,12 +59,12 @@ run_test "Listings table exists" "$KUBECTL exec -n price-tracker deployment/post
 # Test 4: Required columns exist
 run_test "Searches table has required columns" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'price_tracker' AND table_name = 'searches' AND column_name IN ('id', 'search_term', 'website', 'is_active');\" | grep -q '4'"
 
-run_test "Listings table has required columns" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'price_tracker' AND table_name = 'listings' AND column_name IN ('id', 'listing_name', 'price', 'url', 'website', 'scraped_at');\" | grep -q '6'"
+run_test "Listings table has required columns" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'price_tracker' AND table_name = 'listings' AND column_name IN ('id', 'title', 'price', 'url', 'website', 'scraped_at');\" | grep -q '6'"
 
 # Test 5: Indexes exist
-run_test "Listings indexes exist" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'price_tracker' AND tablename = 'listings' AND indexname LIKE 'idx_listings_%';\" | grep -q '5'"
+run_test "Listings indexes exist" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'price_tracker' AND tablename = 'listings' AND indexname LIKE 'idx_listings_%';\" | grep -q '11'"
 
-run_test "Searches indexes exist" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'price_tracker' AND tablename = 'searches' AND indexname LIKE 'idx_searches_%';\" | grep -q '2'"
+run_test "Searches indexes exist" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'price_tracker' AND tablename = 'searches' AND indexname LIKE 'idx_searches_%';\" | grep -q '3'"
 
 # Test 6: Constraints exist
 run_test "Primary key constraints exist" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = 'price_tracker' AND constraint_type = 'PRIMARY KEY';\" | grep -q '2'"
@@ -75,29 +75,29 @@ run_test "Unique constraint on searches" "$KUBECTL exec -n price-tracker deploym
 run_test "Can insert into searches table" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO searches (search_term, website) VALUES ('Test Search', 'test-site') ON CONFLICT DO NOTHING;\" >/dev/null 2>&1"
 
 # Test 8: Data insertion (listings - rich data)
-run_test "Can insert rich data into listings" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (listing_name, price, url, website, scraped_at, brand, model, type, location) VALUES ('Test Rich Listing', 1500.00, 'https://test.com/item1', 'test-site', NOW(), 'TestBrand', 'TestModel', 'Tenor', 'Test Location');\" >/dev/null 2>&1"
+run_test "Can insert rich data into listings" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (title, price, url, website, scraped_at, brand, model, type, seller_location) VALUES ('Test Rich Listing', 1500.00, 'https://test.com/item1', 'ebay', NOW(), 'TestBrand', 'TestModel', 'Tenor', 'Test Location');\" >/dev/null 2>&1"
 
 # Test 9: Data insertion (listings - minimal data)
-run_test "Can insert minimal data into listings" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (listing_name, price, url, website, scraped_at) VALUES ('Test Minimal Listing', 500.00, 'https://test.com/item2', 'test-site', NOW());\" >/dev/null 2>&1"
+run_test "Can insert minimal data into listings" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (title, price, url, website, scraped_at) VALUES ('Test Minimal Listing', 500.00, 'https://test.com/item2', 'ebay', NOW());\" >/dev/null 2>&1"
 
 # Test 10: Data retrieval
 run_test "Can query searches table" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SELECT COUNT(*) FROM searches WHERE search_term = 'Test Search';\" | grep -q '1'"
 
-run_test "Can query listings table" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SELECT COUNT(*) FROM listings WHERE website = 'test-site';\" | grep -q '2'"
+run_test "Can query listings table" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SELECT COUNT(*) FROM listings WHERE website = 'ebay';\" | grep -q '2'"
 
 # Test 11: Index usage verification
-run_test "Indexes are being used" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; EXPLAIN (FORMAT JSON) SELECT * FROM listings WHERE website = 'test-site';\" | grep -q 'Index Scan'"
+run_test "Indexes are being used" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; EXPLAIN (FORMAT JSON) SELECT * FROM listings WHERE website = 'ebay';\" | grep -q 'Index Scan'"
 
 # Test 12: Schema isolation
 run_test "Schema isolation works" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('searches', 'listings');\" | grep -q '0'"
 
 # Test 13: Data types validation
-run_test "Price column accepts decimal values" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (listing_name, price, url, website, scraped_at) VALUES ('Decimal Test', 1234.56, 'https://test.com/decimal', 'test-site', NOW());\" >/dev/null 2>&1"
+run_test "Price column accepts decimal values" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; INSERT INTO listings (title, price, url, website, scraped_at) VALUES ('Decimal Test', 1234.56, 'https://test.com/decimal', 'ebay', NOW());\" >/dev/null 2>&1"
 
 run_test "Timestamp columns work correctly" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SELECT COUNT(*) FROM listings WHERE scraped_at IS NOT NULL;\" | grep -q '[1-9]'"
 
 # Test 14: Cleanup test data
-run_test "Can delete test data" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; DELETE FROM listings WHERE website = 'test-site'; DELETE FROM searches WHERE website = 'test-site';\" >/dev/null 2>&1"
+run_test "Can delete test data" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -c \"SET search_path TO price_tracker, public; DELETE FROM listings WHERE website = 'ebay'; DELETE FROM searches WHERE search_term = 'Test Search';\" >/dev/null 2>&1"
 
 echo ""
 echo "============================================="

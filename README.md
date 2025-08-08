@@ -12,12 +12,18 @@ A comprehensive price tracking application built with modern DevOps practices, d
 ### Components
 - **Frontend**: TBD (React/Vue.js planned)  
 - **Backend**: FastAPI Search API (PostgreSQL connectivity)
-- **Database**: PostgreSQL (official image with custom schema)
+- **Database**: PostgreSQL with comprehensive schema supporting any website
 - **Container Registry**: Docker Hub
 - **Orchestration**: Kubernetes (MicroK8s)
 - **CI/CD**: GitHub Actions
 - **Environment**: WSL2 + Ubuntu
 - **Python**: 3.12+ with virtual environment
+
+### Database Schema
+- **Comprehensive Design**: Single table handles all websites (eBay, Reverb, ShopGoodwill, etc.)
+- **Maximum Flexibility**: No restrictive constraints - supports any website, condition, or currency
+- **Rich Data Support**: Condition, shipping, auctions, location, currency, and more
+- **Future-Proof**: Ready for any new website without schema changes
 
 ## 🚀 Quick Start (Fresh WSL2 Environment)
 
@@ -77,51 +83,38 @@ pip install -r requirements.txt
 chmod +x scripts/*.sh tests/*.sh
 ```
 
-### 4. Deploy Infrastructure
+### 4. Deploy Complete System
 ```bash
-# Deploy all infrastructure
-./scripts/deploy.sh
+# Deploy everything (database + API) with comprehensive testing
+./scripts/deploy-complete.sh
 ```
 
-### 5. Deploy Search API (Optional)
-```bash
-# Deploy the FastAPI Search API (images built via GitHub Actions)
-microk8s kubectl apply -f k8s/api-deployment.yaml
-microk8s kubectl apply -f k8s/api-service.yaml
-```
-
-### 6. Verify Deployment
+### 5. Verify Deployment
 ```bash
 # Run comprehensive integration tests
-./database/test_integration.sh
+./database/test_integration.sh && ./api/test_api_integration.sh
 
 # Check deployment status
 kubectl get all -n price-tracker
 
 # Access applications
-# - Original app: kubectl port-forward service/price-tracker-service 8080:80 -n price-tracker
 # - Search API: http://localhost:30080/health
+# - API Documentation: http://localhost:30080/docs
 ```
 
 ## 🧪 Testing & Local Development
 
-### Local Application Testing
+### Local Development
 ```bash
-# Activate virtual environment
-source venv/bin/activate
+# All components run in Kubernetes (MicroK8s)
+# No local development needed - everything is containerized
 
-# Set environment variables for local testing
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=price_tracker_db
-export DB_USER=admin
-export DB_PASSWORD=YOUR_SECURE_PASSWORD
+# View logs and monitor the system
+kubectl logs -f deployment/price-tracker-api -n price-tracker
+kubectl logs -f deployment/postgres -n price-tracker
 
-# Port-forward PostgreSQL for local access
-kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
-
-# Run the simple database connectivity test
-# API is deployed in Kubernetes - see deployment section
+# Access the API directly
+curl http://localhost:30080/health
 ```
 
 ### Integration Testing
@@ -148,7 +141,6 @@ price-tracker/
 │   ├── deploy-complete.sh # Complete deployment script
 │   ├── clean-slate-deploy.sh # Clean slate deployment
 │   └── setup-secrets.sh  # Interactive secrets setup
-├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
 │   ├── api-deployment.yaml # API deployment
 │   ├── api-service.yaml   # API service
@@ -157,12 +149,14 @@ price-tracker/
 │       └── db-deployment.yaml  # Database deployment
 ├── database/              # Database schema and tests
 │   ├── migrations/       # Database migrations
+│   │   └── 001_complete_schema.sql # Comprehensive schema
 │   ├── test_integration.sh # Database integration tests
 │   └── README.md         # Database documentation
 ├── api/                   # FastAPI Search API
 │   ├── test_api_integration.sh # API integration tests
 │   └── README.md         # API documentation
-├── Dockerfile            # Container configuration
+├── tests/                 # Test documentation
+│   └── README.md         # Integration testing guide
 ├── requirements.txt      # Python dependencies
 └── CHANGELOG.md          # Version history
 ```

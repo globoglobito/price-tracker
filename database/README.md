@@ -2,15 +2,17 @@
 
 ## Overview
 
-This directory contains the database schema and migrations for the Price Tracker application. The schema is designed to be flexible and handle various levels of data richness from different websites.
+This directory contains the database schema and migrations for the Price Tracker application. The schema is designed to be **comprehensive and flexible**, supporting both data-rich sites (eBay, Reverb) and data-poor sites (simple shops) with a single unified structure.
 
 ## Schema Design
 
 ### Core Philosophy
 
-- **Flexible Data Structure**: Handles both data-rich sites (eBay, Reverb) and data-poor sites (simple shops)
+- **Comprehensive Data Structure**: Single table handles all websites with rich optional fields
+- **Maximum Flexibility**: No restrictive constraints - supports any website, condition, or currency
 - **Append-Only Strategy**: Each scrape creates new records for historical price tracking
 - **Scalable Design**: Supports pod-per-search-term architecture
+- **Future-Proof**: Ready for any new website without schema changes
 
 ### Tables
 
@@ -20,118 +22,198 @@ Stores user-defined search terms for different websites.
 ```sql
 CREATE TABLE price_tracker.searches (
     id SERIAL PRIMARY KEY,
-    search_term VARCHAR(200) NOT NULL,
-    website VARCHAR(100) NOT NULL,
+    search_term VARCHAR(255) NOT NULL,
+    website VARCHAR(50) NOT NULL DEFAULT 'ebay',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_scraped_at TIMESTAMP,
+    scrape_frequency_hours INTEGER DEFAULT 24,
     UNIQUE(search_term, website)
 );
 ```
 
 **Fields:**
 - `search_term`: The search query (e.g., "Selmer Mark VI")
-- `website`: Target website (e.g., "ebay", "reverb")
+- `website`: Target website (e.g., "ebay", "reverb", "shopgoodwill")
 - `is_active`: Whether this search should continue running
+- `last_scraped_at`: Last time this search was scraped
+- `scrape_frequency_hours`: How often to scrape (default: 24 hours)
 - `created_at/updated_at`: Timestamps for tracking
 
 #### `listings` Table
-Stores scraped listings with flexible data structure.
+Stores scraped listings with comprehensive data structure supporting any website.
 
 ```sql
 CREATE TABLE price_tracker.listings (
     id SERIAL PRIMARY KEY,
+    search_id INTEGER REFERENCES price_tracker.searches(id) ON DELETE CASCADE,
     
-    -- Core required fields (always available)
-    listing_name VARCHAR(500) NOT NULL,
-    price DECIMAL(10,2) NOT NULL,
+    -- Basic listing information (always available)
+    title VARCHAR(500) NOT NULL,
     url TEXT NOT NULL,
-    website VARCHAR(100) NOT NULL,
-    scraped_at TIMESTAMP NOT NULL,
+    website VARCHAR(50) NOT NULL DEFAULT 'ebay',
+    listing_id VARCHAR(100), -- External listing ID from the website
     
-    -- Optional fields (site-dependent, can be NULL)
+    -- Pricing information
+    price DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'USD',
+    original_price DECIMAL(10,2), -- Original/retail price if available
+    shipping_cost DECIMAL(10,2),
+    
+    -- Item details
     brand VARCHAR(100),
     model VARCHAR(100),
-    type VARCHAR(50),
-    date_listed DATE,
-    location VARCHAR(200),
+    type VARCHAR(100),
+    condition VARCHAR(50), -- Used, New, Open box, For parts or not working, etc.
     
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    -- Location and shipping
+    seller_location VARCHAR(100),
+    shipping_info TEXT,
+    
+    -- Auction/sale specific fields
+    has_best_offer BOOLEAN DEFAULT FALSE,
+    auction_end_time TIMESTAMP,
+    watchers_count INTEGER,
+    sold_quantity INTEGER,
+    available_quantity INTEGER,
+    
+    -- Timestamps
+    date_listed TIMESTAMP,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Metadata
+    notes TEXT,
+    
+    -- Ensure unique listings per website
+    UNIQUE(website, listing_id)
 );
 ```
 
-**Required Fields:**
-- `listing_name`: Title/name of the listing
-- `price`: Current price
+**Required Fields (always populated):**
+- `title`: Title/name of the listing
+- `price`: Current listing price
 - `url`: Direct link to listing
 - `website`: Source website
 - `scraped_at`: When data was scraped
 
-**Optional Fields:**
+**Optional Fields (site-dependent, can be NULL):**
 - `brand`: Item brand (e.g., "Yamaha", "Selmer")
 - `model`: Specific model (e.g., "Mark VI", "YTS-61")
 - `type`: Saxophone type (e.g., "Tenor", "Alto")
-- `date_listed`: When listing was created
-- `location`: Item location
+- `condition`: Item condition (e.g., "Used", "New", "For parts or not working")
+- `seller_location`: Seller's location (country/region)
+- `shipping_info`: Shipping details and options
+- `currency`: Price currency (USD, EUR, PEN, etc.)
+- `original_price`: Original/retail price if available
+- `shipping_cost`: Shipping cost if available
+- `has_best_offer`: Whether listing accepts best offers
+- `auction_end_time`: For auction listings
+- `watchers_count`: Number of people watching
+- `sold_quantity` & `available_quantity`: For multi-quantity listings
+- `date_listed`: When item was originally listed
+- `notes`: Additional metadata
 
 ## Usage Examples
 
 ### Data-Rich Site (eBay)
 ```sql
 INSERT INTO price_tracker.listings (
-    listing_name, price, url, website, scraped_at,
-    brand, model, type, date_listed, location
+    title, price, url, website, scraped_at,
+    brand, model, type, condition, seller_location,
+    currency, shipping_cost, has_best_offer, watchers_count
 ) VALUES (
-    'YAMAHA YTS-61S Tenor Saxophone', 2400.00,
+    'YAMAHA YTS-61S Tenor Saxophone - Excellent Condition', 2400.00,
     'https://www.ebay.com/itm/357413100867', 'ebay', NOW(),
-    'Yamaha', 'YTS-61S', 'Tenor', '2024-01-15', 'Fukuoka Ken, Japan'
+    'Yamaha', 'YTS-61S', 'Tenor', 'Used', 'Fukuoka Ken, Japan',
+    'USD', 25.00, true, 12
 );
 ```
 
 ### Data-Poor Site (Simple Shop)
 ```sql
 INSERT INTO price_tracker.listings (
-    listing_name, price, url, website, scraped_at
+    title, price, url, website, scraped_at
 ) VALUES (
     'Saxophone for Sale', 500.00,
     'https://example-shop.com/saxophone-123', 'example-shop', NOW()
 );
 ```
 
-## Migrations
+### International Site (Different Currency)
+```sql
+INSERT INTO price_tracker.listings (
+    title, price, url, website, scraped_at,
+    brand, model, condition, seller_location, currency
+) VALUES (
+    'Selmer Mark VI Tenor Saxophone', 3500.00,
+    'https://mercado-libre.com/selmer-mark-vi', 'mercadolibre', NOW(),
+    'Selmer', 'Mark VI', 'Used', 'Buenos Aires, Argentina', 'ARS'
+);
+```
+
+## Migration Management
+
+### Current Migration
+- **`001_complete_schema.sql`**: Comprehensive schema with all fields for any website
 
 ### Applying Migrations
-
 ```bash
-# Apply the initial schema
-./database/apply_migration.sh
+# Apply the complete schema
+./database/apply_migration.sh database/migrations/001_complete_schema.sql
 ```
 
-### Testing the Schema
+## Performance Optimization
 
+### Indexes
+The schema includes comprehensive indexing for optimal query performance:
+
+- **Website-based queries**: `idx_listings_website`
+- **Time-based queries**: `idx_listings_scraped_at`
+- **Brand/model searches**: `idx_listings_brand`
+- **Price filtering**: `idx_listings_price`
+- **Condition filtering**: `idx_listings_condition`
+- **Location queries**: `idx_listings_seller_location`
+- **Currency filtering**: `idx_listings_currency`
+- **Auction queries**: `idx_listings_auction_end_time`
+- **Combined queries**: `idx_listings_condition_price`
+- **Search relationships**: `idx_listings_search_id`
+
+### Testing
 ```bash
-# Run comprehensive integration tests
+# Run comprehensive database tests
 ./database/test_integration.sh
-
-# Or test with sample data only
-microk8s kubectl exec -n price-tracker deployment/postgres -- psql -U admin -d price_tracker_db < database/test_schema.sql
 ```
 
-## Indexes
+Tests verify:
+- ✅ Schema creation and isolation
+- ✅ Table structure and constraints
+- ✅ Index creation and usage
+- ✅ Data insertion (rich and minimal)
+- ✅ Data retrieval and querying
+- ✅ Data type validation
+- ✅ Cleanup operations
 
-The schema includes optimized indexes for common query patterns:
+## Flexibility Features
 
-- `idx_listings_website`: Filter by website
-- `idx_listings_scraped_at`: Time-based queries
-- `idx_listings_brand`: Brand filtering
-- `idx_listings_price`: Price range queries
-- `idx_listings_url`: URL lookups
-- `idx_searches_website`: Search term filtering
-- `idx_searches_active`: Active search queries
+### Website Support
+The schema supports **any website** without constraints:
+- **eBay**: Rich data with condition, shipping, auctions
+- **Reverb**: Similar rich data structure
+- **ShopGoodwill**: Basic data
+- **Facebook Marketplace**: Social commerce data
+- **Craigslist**: Local classified data
+- **International sites**: Any currency, any language
+- **Future sites**: No schema changes needed
 
-## Future Considerations
+### Data Validation
+- **No restrictive constraints**: Maximum flexibility
+- **Application-level validation**: Handle data quality in scrapers
+- **NULL-friendly**: Missing data doesn't break queries
+- **Type safety**: Proper data types for each field
 
-1. **Partitioning**: Consider partitioning `listings` by date for large datasets
-2. **Archiving**: Implement archiving strategy for old data
-3. **Analytics**: Add materialized views for common price analysis queries
-4. **Search Integration**: Consider full-text search indexes for listing names 
+### Scalability
+- **Pod-per-search**: Each search term runs in isolated pod
+- **Historical tracking**: All scrapes preserved
+- **Efficient queries**: Optimized indexes for common patterns
+- **Future-ready**: Schema supports any new requirements 

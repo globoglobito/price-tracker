@@ -39,11 +39,15 @@ fi
 
 echo -e "${GREEN}✅ Database connection successful${NC}"
 
+# Get migration file from command line argument or use default
+MIGRATION_FILE=${1:-"database/migrations/001_initial_schema.sql"}
+MIGRATION_NAME=$(basename "$MIGRATION_FILE")
+
 # Apply the migration
-echo -e "${YELLOW}📝 Applying migration: 001_initial_schema.sql${NC}"
+echo -e "${YELLOW}📝 Applying migration: $MIGRATION_NAME${NC}"
 
 # Copy migration file to pod and execute it
-$KUBECTL cp database/migrations/001_initial_schema.sql price-tracker/$(microk8s kubectl get pod -n price-tracker -l app=postgres -o jsonpath='{.items[0].metadata.name}'):/tmp/migration.sql
+$KUBECTL cp "$MIGRATION_FILE" price-tracker/$(microk8s kubectl get pod -n price-tracker -l app=postgres -o jsonpath='{.items[0].metadata.name}'):/tmp/migration.sql
 $KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -f /tmp/migration.sql
 
 if [ $? -eq 0 ]; then

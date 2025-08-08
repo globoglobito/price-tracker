@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ebay-scraper
+  labels:
+    app: price-tracker
+    component: scraper
+spec:
+  schedule: "@hourly"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: price-tracker
+            component: scraper
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: scraper
+              image: docker.io/globoglobitos/price-tracker-scraper:latest
+              imagePullPolicy: Always
+              env:
+                - name: SEARCH_TERM
+                  value: "Selmer Mark VI"
+                - name: MAX_PAGES
+                  value: "2"
+                - name: HEADLESS
+                  value: "true"
+                - name: BROWSER
+                  value: "chromium"
+                # Set this if you have a proxy secret/config later
+                # - name: HTTP_PROXY
+                #   valueFrom:
+                #     secretKeyRef:
+                #       name: scraper-proxy
+                #       key: http_proxy
+              resources:
+                requests:
+                  cpu: "250m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "1Gi"
+

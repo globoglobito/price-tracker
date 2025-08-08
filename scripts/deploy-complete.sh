@@ -74,7 +74,7 @@ echo -e "${GREEN}✅ Database ready${NC}"
 
 # Step 5: Apply database migration
 echo -e "${YELLOW}📝 Applying database migration...${NC}"
-./database/apply_migration.sh
+./database/apply_migration.sh database/migrations/001_complete_schema.sql
 echo -e "${GREEN}✅ Database migration applied${NC}"
 
 # Step 6: Deploy API

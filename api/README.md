@@ -41,7 +41,9 @@ microk8s kubectl apply -f k8s/api-service.yaml
 - **API Documentation**: http://localhost:30080/docs
 - **Search Endpoint**: http://localhost:30080/searches
 
-### Option 2: Local Development
+### Option 2: Local Development (Advanced)
+
+**Note**: The API is designed to run in Kubernetes. Local development is only for advanced debugging.
 
 #### 1. Install Dependencies
 ```bash
@@ -58,21 +60,12 @@ export DB_PASSWORD=price_tracker_password
 ```
 
 #### 3. Set up Database Port Forwarding
-Since the API runs locally but the database is in Kubernetes, you need to forward the database port:
-
 ```bash
 # Forward PostgreSQL port from Kubernetes to localhost
 microk8s kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
 ```
 
-**Note**: Keep this port forwarding running while using the API. The `&` runs it in the background.
-
-#### 4. Run the API
-```bash
-# API is deployed in Kubernetes - see main README for deployment instructions
-```
-
-Or with uvicorn:
+#### 4. Run the API Locally
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -83,7 +76,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Usage Examples
 
-**Note**: Replace `localhost:8000` with `localhost:30080` for Kubernetes deployment.
+**Note**: Use `localhost:30080` for Kubernetes deployment (recommended).
 
 ### Create a Search Term
 ```bash
