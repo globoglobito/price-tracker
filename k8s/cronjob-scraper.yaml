@@ -32,12 +32,19 @@ spec:
                   value: "true"
                 - name: BROWSER
                   value: "chromium"
-                # Set this if you have a proxy secret/config later
-                # - name: HTTP_PROXY
-                #   valueFrom:
-                #     secretKeyRef:
-                #       name: scraper-proxy
-                #       key: http_proxy
+                # Proxy configuration
+                - name: HTTP_PROXY
+                  valueFrom:
+                    secretKeyRef:
+                      name: scraper-proxy
+                      key: http_proxy
+                - name: HTTPS_PROXY
+                  valueFrom:
+                    secretKeyRef:
+                      name: scraper-proxy
+                      key: https_proxy
+                - name: NO_PROXY
+                  value: ".svc,.cluster.local,localhost,127.0.0.1"
               resources:
                 requests:
                   cpu: "250m"
