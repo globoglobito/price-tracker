@@ -4,14 +4,26 @@ A comprehensive price tracking application built with modern DevOps practices, d
 
 ## 🏗️ Architecture
 
+### Image Strategy
+- **Database**: `postgres:15-alpine` (official PostgreSQL image)
+- **API**: `globoglobitos/price-tracker-api:latest` (custom FastAPI application)
+- **Future Scrapers**: `globoglobitos/price-tracker-scraper:latest` (custom scraper pods)
+
+### Components
 - **Frontend**: TBD (React/Vue.js planned)  
-- **Backend**: Simple Python application (PostgreSQL connectivity demo)
-- **Database**: PostgreSQL (Bitnami Helm chart)
+- **Backend**: FastAPI Search API (PostgreSQL connectivity)
+- **Database**: PostgreSQL with comprehensive schema supporting any website
 - **Container Registry**: Docker Hub
 - **Orchestration**: Kubernetes (MicroK8s)
 - **CI/CD**: GitHub Actions
 - **Environment**: WSL2 + Ubuntu
-- **Python**: 3.11+ with virtual environment
+- **Python**: 3.12+ with virtual environment
+
+### Database Schema
+- **Comprehensive Design**: Single table handles all websites (eBay, Reverb, ShopGoodwill, etc.)
+- **Maximum Flexibility**: No restrictive constraints - supports any website, condition, or currency
+- **Rich Data Support**: Condition, shipping, auctions, location, currency, and more
+- **Future-Proof**: Ready for any new website without schema changes
 
 ## 🚀 Quick Start (Fresh WSL2 Environment)
 
@@ -33,6 +45,12 @@ newgrp microk8s
 
 # Verify installation
 microk8s status --wait-ready
+
+# Create kubectl alias (recommended for easier usage)
+sudo snap alias microk8s.kubectl kubectl
+
+# Verify kubectl works
+kubectl cluster-info
 ```
 
 ### 2. **🔐 Setup Secrets (Interactive)**
@@ -65,43 +83,38 @@ pip install -r requirements.txt
 chmod +x scripts/*.sh tests/*.sh
 ```
 
-### 4. Deploy Infrastructure
+### 4. Deploy Complete System
 ```bash
-# Deploy all infrastructure
-./scripts/deploy.sh
+# Deploy everything (database + API) with comprehensive testing
+./scripts/deploy-complete.sh
 ```
 
 ### 5. Verify Deployment
 ```bash
 # Run comprehensive integration tests
-./tests/run-tests.sh
+./database/test_integration.sh && ./api/test_api_integration.sh
 
 # Check deployment status
 kubectl get all -n price-tracker
 
-# Access application (when ready)
-kubectl port-forward service/price-tracker-service 8080:80 -n price-tracker
+# Access applications
+# - Search API: http://localhost:30080/health
+# - API Documentation: http://localhost:30080/docs
 ```
 
 ## 🧪 Testing & Local Development
 
-### Local Application Testing
+### Local Development
 ```bash
-# Activate virtual environment
-source venv/bin/activate
+# All components run in Kubernetes (MicroK8s)
+# No local development needed - everything is containerized
 
-# Set environment variables for local testing
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=price_tracker_db
-export DB_USER=admin
-export DB_PASSWORD=YOUR_SECURE_PASSWORD
+# View logs and monitor the system
+kubectl logs -f deployment/price-tracker-api -n price-tracker
+kubectl logs -f deployment/postgres -n price-tracker
 
-# Port-forward PostgreSQL for local access
-kubectl port-forward service/postgres-service 5432:5432 -n price-tracker &
-
-# Run the simple database connectivity test
-python app.py
+# Access the API directly
+curl http://localhost:30080/health
 ```
 
 ### Integration Testing
@@ -109,14 +122,13 @@ We provide essential integration tests to validate your deployment:
 
 ```bash
 # Run essential tests to verify deployment
-./tests/run-tests.sh
+./database/test_integration.sh && ./api/test_api_integration.sh
 ```
 
 Tests verify:
-- **Environment**: MicroK8s running, kubectl connected
-- **Deployment**: Namespace, PostgreSQL, and application pods running
-- **Database**: PostgreSQL accessible and connectable
-- **Application**: Application healthy and running
+- **Database**: Schema, tables, constraints, data operations (20 tests)
+- **API**: Health endpoints, CRUD operations, error handling (15 tests)
+- **Integration**: Full system connectivity and functionality
 
 ## 📁 Project Structure
 
@@ -126,21 +138,25 @@ price-tracker/
 ├── docs/                  # Documentation
 │   └── SECRETS.md        # Secrets setup guide
 ├── scripts/               # Deployment and utility scripts
-│   ├── deploy.sh         # Main deployment script
+│   ├── deploy-complete.sh # Complete deployment script
+│   ├── clean-slate-deploy.sh # Clean slate deployment
 │   └── setup-secrets.sh  # Interactive secrets setup
-├── helm/                  # Helm chart values
 ├── k8s/                   # Kubernetes manifests
-│   ├── configmaps.yaml   # Application configuration
+│   ├── api-deployment.yaml # API deployment
+│   ├── api-service.yaml   # API service
 │   ├── postgres-values.yaml # PostgreSQL configuration
-│   ├── service.yaml      # Kubernetes services
 │   └── manifests/        # Deployment configs
-│       ├── app-deployment.yaml # Application deployment
 │       └── db-deployment.yaml  # Database deployment
-├── tests/                 # Integration test suites
-│   ├── run-tests.sh      # Main test runner
-│   └── test-simple.sh    # Simple test suite
-├── app.py                 # Main Python application
-├── Dockerfile            # Container configuration
+├── database/              # Database schema and tests
+│   ├── migrations/       # Database migrations
+│   │   └── 001_complete_schema.sql # Comprehensive schema
+│   ├── test_integration.sh # Database integration tests
+│   └── README.md         # Database documentation
+├── api/                   # FastAPI Search API
+│   ├── test_api_integration.sh # API integration tests
+│   └── README.md         # API documentation
+├── tests/                 # Test documentation
+│   └── README.md         # Integration testing guide
 ├── requirements.txt      # Python dependencies
 └── CHANGELOG.md          # Version history
 ```
@@ -159,13 +175,13 @@ price-tracker/
 ### Local Development (WSL2)
 ```bash
 # Start development environment
-./scripts/deploy.sh
+./scripts/deploy-complete.sh
 
 # Run tests during development
-./tests/run-tests.sh --skip-deploy
+./database/test_integration.sh && ./api/test_api_integration.sh
 
 # View logs
-kubectl logs -f deployment/price-tracker-app -n price-tracker
+kubectl logs -f deployment/price-tracker-api -n price-tracker
 ```
 
 ### CI/CD Pipeline
@@ -180,8 +196,8 @@ kubectl logs -f deployment/price-tracker-app -n price-tracker
 # Check application health
 kubectl get pods -n price-tracker -w
 
-# View application logs
-kubectl logs -f deployment/price-tracker-app -n price-tracker
+# View API logs
+kubectl logs -f deployment/price-tracker-api -n price-tracker
 
 # Database logs
 kubectl logs -f deployment/postgres -n price-tracker
@@ -192,16 +208,25 @@ kubectl top pods -n price-tracker
 
 ## 🔄 Common Operations
 
+### Complete Deployment (Recommended)
+```bash
+# Clean slate deployment - removes everything and redeploys
+./scripts/clean-slate-deploy.sh
+
+# Or step-by-step deployment
+./scripts/deploy-complete.sh
+```
+
 ### Update Application
 ```bash
 # Pull latest changes
 git pull origin main
 
-# Redeploy
-kubectl rollout restart deployment/price-tracker-app -n price-tracker
+# Redeploy API
+kubectl rollout restart deployment/price-tracker-api -n price-tracker
 
 # Monitor rollout
-kubectl rollout status deployment/price-tracker -n price-tracker
+kubectl rollout status deployment/price-tracker-api -n price-tracker
 ```
 
 ### Backup Database
@@ -215,21 +240,22 @@ kubectl exec -i deployment/postgres -n price-tracker -- psql -U price_tracker_us
 
 ### Scale Application
 ```bash
-# Scale up
-kubectl scale deployment price-tracker --replicas=3 -n price-tracker
+# Scale up API
+kubectl scale deployment price-tracker-api --replicas=3 -n price-tracker
 
-# Scale down
-kubectl scale deployment price-tracker --replicas=1 -n price-tracker
+# Scale down API
+kubectl scale deployment price-tracker-api --replicas=1 -n price-tracker
 ```
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Secrets not found**: Ensure all 4 secrets are created (see [docs/SECRETS.md](docs/SECRETS.md))
-2. **Pods pending**: Check storage and resource availability
-3. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`
-4. **Database connection**: Check PostgreSQL pod status and secrets
+1. **kubectl not found/connection refused**: Make sure you've created the alias with `sudo snap alias microk8s.kubectl kubectl` or use `microk8s kubectl` instead
+2. **Secrets not found**: Ensure all 4 secrets are created (see [docs/SECRETS.md](docs/SECRETS.md))
+3. **Pods pending**: Check storage and resource availability
+4. **Image pull errors**: Verify Docker Hub credentials in `docker-registry-secret`. API image: `globoglobitos/price-tracker-api:latest`
+5. **Database connection**: Check PostgreSQL pod status and secrets
 
 ### Useful Commands
 ```bash
@@ -249,7 +275,7 @@ kubectl delete namespace price-tracker
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run integration tests: `./tests/run-tests.sh`
+4. Run integration tests: `./database/test_integration.sh` and `./api/test_api_integration.sh`
 5. Submit a pull request
 
 ## 📖 Documentation
