@@ -4,12 +4,12 @@ This document provides complete instructions for creating all required Kubernete
 
 ## 📋 Overview
 
-The Price Tracker application requires **4 Kubernetes secrets** to be created in the `price-tracker` namespace:
+The Price Tracker application requires the following Kubernetes secrets in the `price-tracker` namespace:
 
-1. `postgres-secret` - PostgreSQL database credentials
-2. `app-secrets` - Application-specific secrets
-3. `docker-registry-secret` - Docker Hub authentication for private images
-4. `price-tracker-postgres-credentials` - Bitnami PostgreSQL Helm chart credentials
+- `postgres-secret` (required) – PostgreSQL database credentials
+- `docker-registry-secret` (required) – Docker Hub authentication for pulling images
+- `price-tracker-postgres-credentials` (optional; only if using Bitnami Helm PostgreSQL)
+- `scraper-proxy` (optional) – HTTP/HTTPS proxy for scraper pods if needed
 
 ## 🔧 Prerequisites
 
@@ -24,25 +24,18 @@ The Price Tracker application requires **4 Kubernetes secrets** to be created in
 kubectl create namespace price-tracker
 ```
 
-### 2. Create All Secrets
+### 2. Create Required Secrets
 Run these commands in order, replacing the placeholder values with your actual credentials:
 
 ```bash
-# 1. PostgreSQL Database Secret
+# 1. PostgreSQL Database Secret (required)
 kubectl create secret generic postgres-secret \
-  --from-literal=POSTGRES_USER=price_tracker_user \
+  --from-literal=POSTGRES_USER=admin \
   --from-literal=POSTGRES_PASSWORD=your_db_password_here \
   --from-literal=POSTGRES_DB=price_tracker_db \
   -n price-tracker
 
-# 2. Application Secrets
-kubectl create secret generic app-secrets \
-  --from-literal=DATABASE_URL=postgresql://price_tracker_user:your_db_password_here@postgres-service:5432/price_tracker_db \
-  --from-literal=JWT_SECRET=your_jwt_secret_here \
-  --from-literal=API_KEY=your_api_key_here \
-  -n price-tracker
-
-# 3. Docker Registry Secret (for private images)
+# 2. Docker Registry Secret (required)
 kubectl create secret docker-registry docker-registry-secret \
   --docker-server=https://index.docker.io/v1/ \
   --docker-username=your_dockerhub_username \
@@ -50,10 +43,16 @@ kubectl create secret docker-registry docker-registry-secret \
   --docker-email=your_email@example.com \
   -n price-tracker
 
-# 4. PostgreSQL Credentials for Bitnami Helm Chart
+# 3. PostgreSQL Credentials for Bitnami Helm Chart (optional)
 kubectl create secret generic price-tracker-postgres-credentials \
   --from-literal=postgres-password=your_db_password_here \
   --from-literal=password=your_db_password_here \
+  -n price-tracker
+
+# 4. Scraper Proxy (optional)
+kubectl create secret generic scraper-proxy \
+  --from-literal=http_proxy=http://user:pass@host:port \
+  --from-literal=https_proxy=http://user:pass@host:port \
   -n price-tracker
 ```
 
@@ -76,25 +75,14 @@ kubectl create secret generic postgres-secret \
   -n price-tracker
 ```
 
-### 2. `app-secrets`
-**Purpose**: Application-level secrets and configuration
+### 2. `scraper-proxy` (optional)
+**Purpose**: Provide outbound proxy settings to the scraper pods when required. This is optional and not needed for most environments.
 **Type**: `generic`
-**Required Fields**:
-- `DATABASE_URL`: Full PostgreSQL connection string
-- `JWT_SECRET`: Secret key for JWT token signing (generate a random 32+ character string)
-- `API_KEY`: API key for external services (can be placeholder for now)
+**Fields**:
+- `http_proxy`: HTTP proxy URL
+- `https_proxy`: HTTPS proxy URL
 
-**Example**:
-```bash
-# Generate a random JWT secret
-JWT_SECRET=$(openssl rand -base64 32)
-
-kubectl create secret generic app-secrets \
-  --from-literal=DATABASE_URL=postgresql://price_tracker_user:MySecurePassword123!@postgres-service:5432/price_tracker_db \
-  --from-literal=JWT_SECRET=$JWT_SECRET \
-  --from-literal=API_KEY=placeholder-api-key \
-  -n price-tracker
-```
+The CronJob references this secret optionally, so you can skip creating it if you do not need a proxy.
 
 ### 3. `docker-registry-secret`
 **Purpose**: Authentication for pulling Docker images from Docker Hub
@@ -162,9 +150,9 @@ kubectl get secrets -n price-tracker
 
 # Check specific secret contents (base64 encoded)
 kubectl get secret postgres-secret -n price-tracker -o yaml
-kubectl get secret app-secrets -n price-tracker -o yaml
 kubectl get secret docker-registry-secret -n price-tracker -o yaml
 kubectl get secret price-tracker-postgres-credentials -n price-tracker -o yaml
+kubectl get secret scraper-proxy -n price-tracker -o yaml
 
 # Decode a specific secret value
 kubectl get secret postgres-secret -n price-tracker -o jsonpath='{.data.POSTGRES_USER}' | base64 -d
@@ -179,7 +167,7 @@ You can test that secrets are working with our integration tests:
 ./tests/run-tests.sh --skip-deploy
 
 # Test full deployment including secrets
-./scripts/deploy.sh
+./scripts/deploy-complete.sh
 ./tests/run-tests.sh
 ```
 
@@ -295,4 +283,4 @@ These secrets are automatically used by:
 - `k8s/manifests/db-deployment.yaml` - Database deployment
 - `helm/price-tracker-postgres-values.yaml` - Helm chart values
 
-The deployment process will fail if any of these secrets are missing, so ensure all 4 are created before running `./scripts/deploy.sh`.
+Create at least the required secrets before running `./scripts/deploy-complete.sh`. The `scraper-proxy` and `price-tracker-postgres-credentials` are optional depending on your setup.

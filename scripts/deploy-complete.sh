@@ -93,11 +93,16 @@ echo -e "${YELLOW}⏳ Waiting for API to be ready...${NC}"
 $KUBECTL wait --for=condition=ready pod -l app=price-tracker-api -n price-tracker --timeout=300s
 echo -e "${GREEN}✅ API ready${NC}"
 
-# Step 7: Run integration tests
+# Step 7: Deploy (but keep suspended) scraper CronJob
+echo -e "${YELLOW}🕒 Deploying scraper CronJob (suspended by default)...${NC}"
+$KUBECTL apply -f k8s/cronjob-scraper.yaml -n price-tracker
+echo -e "${GREEN}✅ Scraper CronJob applied${NC}"
+
+# Step 8: Run integration tests
 echo -e "${YELLOW}🧪 Running integration tests...${NC}"
 ./database/test_integration.sh
 
-# Step 8: Test API endpoints
+# Step 9: Test API endpoints
 echo -e "${YELLOW}🔍 Testing API endpoints...${NC}"
 sleep 10  # Give API time to fully start
 

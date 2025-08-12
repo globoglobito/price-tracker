@@ -5,10 +5,10 @@
 echo "🔐 Price Tracker - Required Kubernetes Secrets"
 echo "=============================================="
 echo ""
-echo "Before deploying, you must create these 4 secrets in the 'price-tracker' namespace:"
+echo "Before deploying, you must create these required secrets in the 'price-tracker' namespace:"
 echo ""
 
-echo "1️⃣  postgres-secret (Database credentials)"
+echo "1️⃣  postgres-secret (Database credentials - required)"
 echo "   kubectl create secret generic postgres-secret \\"
 echo "     --from-literal=POSTGRES_USER=price_tracker_user \\"
 echo "     --from-literal=POSTGRES_PASSWORD=YOUR_DB_PASSWORD \\"
@@ -16,15 +16,7 @@ echo "     --from-literal=POSTGRES_DB=price_tracker_db \\"
 echo "     -n price-tracker"
 echo ""
 
-echo "2️⃣  app-secrets (Application secrets)"
-echo "   kubectl create secret generic app-secrets \\"
-echo "     --from-literal=DATABASE_URL=postgresql://price_tracker_user:YOUR_DB_PASSWORD@postgres-service:5432/price_tracker_db \\"
-echo "     --from-literal=JWT_SECRET=\$(openssl rand -base64 32) \\"
-echo "     --from-literal=API_KEY=placeholder \\"
-echo "     -n price-tracker"
-echo ""
-
-echo "3️⃣  docker-registry-secret (Docker Hub access)"
+echo "2️⃣  docker-registry-secret (Docker Hub access - required)"
 echo "   kubectl create secret docker-registry docker-registry-secret \\"
 echo "     --docker-server=https://index.docker.io/v1/ \\"
 echo "     --docker-username=YOUR_DOCKERHUB_USERNAME \\"
@@ -33,7 +25,13 @@ echo "     --docker-email=YOUR_EMAIL \\"
 echo "     -n price-tracker"
 echo ""
 
-echo "4️⃣  price-tracker-postgres-credentials (Helm chart)"
+echo "3️⃣  price-tracker-postgres-credentials (Optional - only if using Bitnami Helm PostgreSQL)"
+echo "4️⃣  scraper-proxy (Optional - only if you need an outbound proxy)"
+echo "   kubectl create secret generic scraper-proxy \\" 
+echo "     --from-literal=http_proxy=http://user:pass@host:port \\" 
+echo "     --from-literal=https_proxy=http://user:pass@host:port \\" 
+echo "     -n price-tracker"
+echo ""
 echo "   kubectl create secret generic price-tracker-postgres-credentials \\"
 echo "     --from-literal=postgres-password=YOUR_DB_PASSWORD \\"
 echo "     --from-literal=password=YOUR_DB_PASSWORD \\"
@@ -51,8 +49,8 @@ echo "✅ Verify secrets after creation:"
 echo "   kubectl get secrets -n price-tracker"
 echo ""
 
-echo "🚀 Deploy after secrets are created:"
-echo "   ./scripts/deploy.sh"
+echo "🚀 Deploy after required secrets are created:"
+echo "   ./scripts/deploy-complete.sh"
 echo ""
 
 # Check if secrets already exist
@@ -61,7 +59,7 @@ if command -v kubectl &> /dev/null; then
     if kubectl get namespace price-tracker &> /dev/null; then
         echo "   Namespace: ✅ exists"
         
-        secrets=("postgres-secret" "app-secrets" "docker-registry-secret" "price-tracker-postgres-credentials")
+        secrets=("postgres-secret" "docker-registry-secret" "price-tracker-postgres-credentials" "scraper-proxy")
         for secret in "${secrets[@]}"; do
             if kubectl get secret "$secret" -n price-tracker &> /dev/null; then
                 echo "   $secret: ✅ exists"

@@ -19,12 +19,17 @@ import os
 import re
 import time
 import random
+import pathlib
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 try:
     from playwright_stealth import stealth_sync
 except Exception:
     stealth_sync = None  # Optional dependency
+try:
+    from scraper.db import upsert_listings
+except Exception:
+    upsert_listings = None
 
 
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +60,9 @@ class EbayBrowserScraper:
         timeout_ms: int = 30000,
         browser_name: str = "chromium",
         device_name: Optional[str] = None,
+        user_data_dir: Optional[str] = None,
+        slow_mo_ms: int = 0,
+        debug_snapshot_dir: Optional[str] = None,
     ) -> None:
         self.search_term = search_term
         self.max_pages = max_pages
@@ -64,6 +72,9 @@ class EbayBrowserScraper:
         self.timeout_ms = timeout_ms
         self.browser_name = browser_name.lower()
         self.device_name = device_name
+        self.debug_snapshot_dir = debug_snapshot_dir
+        self.user_data_dir = user_data_dir
+        self.slow_mo_ms = slow_mo_ms
 
     def _build_search_url(self, page_number: int) -> str:
         base_url = "https://www.ebay.com/sch/i.html"
@@ -153,6 +164,28 @@ class EbayBrowserScraper:
             "captcha",
         ]
         return any(marker in text for marker in block_markers)
+
+    def _snapshot_debug(self, page: Page, label: str) -> None:
+        if not self.debug_snapshot_dir:
+            return
+        try:
+            os.makedirs(self.debug_snapshot_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base = os.path.join(self.debug_snapshot_dir, f"{ts}_{label}")
+            # Screenshot
+            try:
+                page.screenshot(path=f"{base}.png", full_page=True)
+            except Exception:
+                pass
+            # HTML
+            try:
+                with open(f"{base}.html", "w", encoding="utf-8") as f:
+                    f.write(page.content())
+            except Exception:
+                pass
+            logger.info(f"Saved debug snapshot: {base}.[png|html]")
+        except Exception:
+            pass
 
     def _parse_listing_elements(self, page: Page) -> List[Dict]:
         items = page.query_selector_all(".s-item")
@@ -278,9 +311,10 @@ class EbayBrowserScraper:
 
         # Wait for the search box and type query
         page.wait_for_selector("#gh-ac", timeout=self.timeout_ms)
-        page.fill("#gh-ac", self.search_term)
-        # Random small delay to mimic typing pause
-        time.sleep(0.3 + random.random() * 0.4)
+        page.click("#gh-ac")
+        for ch in self.search_term:
+            page.keyboard.type(ch, delay=50 + int(random.random() * 50))
+        time.sleep(0.6 + random.random() * 0.8)
         # Submit using Enter to avoid flaky button overlays
         page.keyboard.press("Enter")
         try:
@@ -293,6 +327,17 @@ class EbayBrowserScraper:
                 page.wait_for_selector(".s-item", timeout=self.timeout_ms)
             except Exception:
                 logger.warning("Results still not visible after fallback navigation")
+        try:
+            for _ in range(3):
+                page.mouse.move(100 + random.randint(0, 600), 200 + random.randint(0, 400))
+                page.mouse.wheel(0, 300 + random.randint(0, 300))
+                time.sleep(0.4 + random.random() * 0.6)
+            first = page.query_selector(".s-item__link")
+            if first:
+                first.hover()
+                time.sleep(0.5 + random.random() * 0.8)
+        except Exception:
+            pass
 
     def scrape_page(self, page_num: int, page: Page) -> List[Dict]:
         # For first page, prefer UI-based navigation to get cookies/session
@@ -311,14 +356,22 @@ class EbayBrowserScraper:
             page.wait_for_selector(".s-item", timeout=self.timeout_ms)
         except Exception:
             logger.warning("Results selector not found within timeout; attempting to parse whatever loaded")
+            self._snapshot_debug(page, f"p{page_num}_no_results_selector")
 
-        if self._is_block_page(page):
-            logger.warning("Likely hit a bot-detection page; returning no results for this page")
-            return []
-
+        # Always try to parse first; if we get listings, accept them
         listings = self._parse_listing_elements(page)
         logger.info(f"Parsed {len(listings)} listings from page {page_num}")
-        return listings
+        if listings:
+            return listings
+
+        # If no listings parsed, then check for block indicators
+        if self._is_block_page(page):
+            logger.warning("Likely hit a bot-detection page; returning no results for this page")
+            self._snapshot_debug(page, f"p{page_num}_block_page")
+            return []
+
+        self._snapshot_debug(page, f"p{page_num}_zero_listings")
+        return []
 
     def scrape(self) -> List[Dict]:
         results: List[Dict] = []
@@ -336,20 +389,34 @@ class EbayBrowserScraper:
             if self.proxy_url:
                 launch_kwargs["proxy"] = {"server": self.proxy_url}
 
-            if self.browser_name == "firefox":
-                browser = p.firefox.launch(**launch_kwargs)
-            elif self.browser_name == "webkit":
-                browser = p.webkit.launch(**launch_kwargs)
-            else:
-                browser = p.chromium.launch(**launch_kwargs)
+            context = None
+            browser = None
             try:
-                # Optional device emulation: try a common desktop or mobile
-                device_descriptor = None
-                device_name_env = os.environ.get("DEVICE") or self.device_name
-                if device_name_env:
-                    device_descriptor = p.devices.get(device_name_env)
-                context = self._new_context(browser, device=device_descriptor)
-                page = context.new_page()
+                # Persistent context if user data dir provided (chromium/firefox)
+                if self.user_data_dir and self.browser_name in ("chromium", "firefox"):
+                    bt = getattr(p, self.browser_name)
+                    persist_kwargs = dict(launch_kwargs)
+                    if self.slow_mo_ms:
+                        persist_kwargs["slow_mo"] = self.slow_mo_ms
+                    context = bt.launch_persistent_context(self.user_data_dir, **persist_kwargs)
+                    page = context.new_page()
+                else:
+                    if self.browser_name == "firefox":
+                        if self.slow_mo_ms:
+                            launch_kwargs["slow_mo"] = self.slow_mo_ms
+                        browser = p.firefox.launch(**launch_kwargs)
+                    elif self.browser_name == "webkit":
+                        browser = p.webkit.launch(**launch_kwargs)
+                    else:
+                        if self.slow_mo_ms:
+                            launch_kwargs["slow_mo"] = self.slow_mo_ms
+                        browser = p.chromium.launch(**launch_kwargs)
+                    device_descriptor = None
+                    device_name_env = os.environ.get("DEVICE") or self.device_name
+                    if device_name_env:
+                        device_descriptor = p.devices.get(device_name_env)
+                    context = self._new_context(browser, device=device_descriptor)
+                    page = context.new_page()
                 # Apply stealth if available
                 if stealth_sync is not None:
                     try:
@@ -372,10 +439,168 @@ class EbayBrowserScraper:
                         delay = self.delay_seconds + (0.5)
                         logger.info(f"Sleeping {delay:.1f}s before next page...")
                         time.sleep(delay)
+                # Optional enrichment and snapshots for a small subset
+                self._maybe_enrich_and_snapshot(page, results)
             finally:
-                browser.close()
+                try:
+                    if context:
+                        context.close()
+                except Exception:
+                    pass
+                try:
+                    if browser:
+                        browser.close()
+                except Exception:
+                    pass
         logger.info(f"Scrape complete. Total listings: {len(results)}")
         return results
+
+    def _sanitize_filename(self, text: str) -> str:
+        text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)[:100]
+        return text or "listing"
+
+    def _maybe_enrich_and_snapshot(self, page: Page, listings: List[Dict]) -> None:
+        # Environment-driven behavior
+        snapshot_dir = os.environ.get("SNAPSHOT_DIR")
+        enrich_limit = int(os.environ.get("ENRICH_LIMIT", "0"))
+        allowed_conditions_env = os.environ.get(
+            "ALLOWED_CONDITIONS",
+            "Used,For parts or not working,Not Specified",
+        )
+        allowed_conditions = {c.strip().lower() for c in allowed_conditions_env.split(",")}
+
+        # Filter by allowed conditions
+        filtered = [
+            l for l in listings
+            if (l.get("condition") or "").lower() in allowed_conditions
+        ]
+        if enrich_limit == 0 and not snapshot_dir:
+            # Only filtering requested – replace the list contents
+            listings[:] = filtered
+            logger.info(
+                f"Filtered listings by condition. Before: {len(listings)} After: {len(filtered)}"
+            )
+            return
+
+        listings[:] = filtered
+        if not snapshot_dir or enrich_limit <= 0:
+            return
+
+        pathlib.Path(snapshot_dir).mkdir(parents=True, exist_ok=True)
+        subset = listings[:enrich_limit]
+        logger.info(f"Enriching {len(subset)} listings with snapshots → {snapshot_dir}")
+
+        for idx, item in enumerate(subset, 1):
+            url = item.get("url")
+            if not url:
+                continue
+            try:
+                page.goto(url, wait_until="domcontentloaded")
+                # Mild human-like delay and scroll
+                time.sleep(0.8 + random.random())
+                try:
+                    page.mouse.wheel(0, 600)
+                except Exception:
+                    pass
+                # Save screenshot and html
+                base = f"{idx:02d}_" + self._sanitize_filename(item.get("title") or "listing")
+                png_path = os.path.join(snapshot_dir, base + ".png")
+                html_path = os.path.join(snapshot_dir, base + ".html")
+                try:
+                    page.screenshot(path=png_path, full_page=True)
+                except Exception:
+                    pass
+                try:
+                    with open(html_path, "w", encoding="utf-8") as f:
+                        f.write(page.content())
+                except Exception:
+                    pass
+                logger.info(f"Saved listing snapshot: {png_path}")
+                # Lightweight enrichment on detail page
+                # Shipping cost
+                ship_txt = page.inner_text('body') if page.is_visible('body') else ''
+                shipping_cost = None
+                try:
+                    for el in page.query_selector_all('span, div')[:1500]:
+                        t = (el.inner_text() or '').strip()
+                        tl = t.lower()
+                        if ('shipping' in tl or 'postage' in tl) and ('handling' not in tl):
+                            if 'free' in tl:
+                                shipping_cost = 0.0
+                                break
+                            m = re.search(r"\$[\d,]+\.?\d*", t)
+                            if m:
+                                try:
+                                    shipping_cost = float(m.group().replace('$', '').replace(',', ''))
+                                    break
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                # Location and region
+                location_text = None
+                region = None
+                try:
+                    loc_sel = [
+                        'div.ux-seller-section__itemLocation span.ux-textspans',
+                        'div.ux-seller-section__itemLocation',
+                        'div.d-item-location',
+                        '#itemLocation',
+                        'span[itemprop="availableAtOrFrom"]',
+                        'div#RightSummaryPanel div.u-flL.iti-eu-bld-gry',
+                    ]
+                    for s in loc_sel:
+                        el = page.query_selector(s)
+                        if el:
+                            location_text = (el.inner_text() or '').strip()
+                            if location_text:
+                                break
+                    if not location_text:
+                        for el in page.query_selector_all('span, div, li')[:2000]:
+                            t = (el.inner_text() or '').strip()
+                            tl = t.lower()
+                            if not t:
+                                continue
+                            if tl.startswith('located in'):
+                                location_text = t.replace('Located in', '').strip(); break
+                            if 'item location' in tl:
+                                parts = t.split(':', 1)
+                                location_text = parts[1].strip() if len(parts) > 1 else t; break
+                    if location_text:
+                        ll = location_text.lower()
+                        if any(term in ll for term in ['united states', 'usa', 'u.s.a', 'us']):
+                            region = 'USA'
+                        elif any(term in ll for term in [
+                            'united kingdom','england','scotland','wales','northern ireland','ireland','republic of ireland',
+                            'france','germany','italy','spain','portugal','belgium','netherlands','luxembourg','austria','switzerland',
+                            'sweden','norway','denmark','finland','iceland','poland','czech','czech republic','slovakia','hungary','greece',
+                            'romania','bulgaria','croatia','slovenia','estonia','latvia','lithuania','serbia','bosnia','montenegro',
+                            'albania','north macedonia','moldova','ukraine'
+                        ]):
+                            region = 'Europe'
+                        else:
+                            region = 'Other'
+                except Exception:
+                    pass
+                # Attach to item for DB
+                if shipping_cost is not None:
+                    item['shipping_cost'] = shipping_cost
+                if location_text:
+                    item['seller_location'] = location_text
+                    item['location_text'] = location_text
+                if region:
+                    item['region'] = region
+                # Small cooldown
+                time.sleep(1.0 + random.random())
+            except Exception as e:
+                logger.warning(f"Enrichment failed for {url}: {e}")
+        # DB upsert if available
+        if upsert_listings:
+            try:
+                count = upsert_listings(listings)
+                logger.info(f"Upserted {count} listings into DB")
+            except Exception as e:
+                logger.warning(f"DB upsert failed: {e}")
 
 
 def main() -> None:
@@ -384,6 +609,9 @@ def main() -> None:
     headless_env = os.environ.get("HEADLESS", "true").lower() in ("1", "true", "yes")
     delay = float(os.environ.get("REQUEST_DELAY", "2.5"))
     browser_name = os.environ.get("BROWSER", "chromium").lower()
+    user_data_dir = os.environ.get("USER_DATA_DIR")
+    slow_mo_ms = int(os.environ.get("SLOW_MO_MS", "0"))
+    debug_snapshot_dir = os.environ.get("DEBUG_SNAPSHOT_DIR")
 
     scraper = EbayBrowserScraper(
         search_term=search_term,
@@ -391,6 +619,9 @@ def main() -> None:
         delay_seconds=delay,
         headless=headless_env,
         browser_name=browser_name,
+        user_data_dir=user_data_dir,
+        slow_mo_ms=slow_mo_ms,
+        debug_snapshot_dir=debug_snapshot_dir,
     )
     listings = scraper.scrape()
 

@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: ebay-scraper
+  namespace: price-tracker
   labels:
     app: price-tracker
     component: scraper
@@ -20,11 +21,30 @@ spec:
             component: scraper
         spec:
           restartPolicy: Never
+          imagePullSecrets:
+            - name: docker-registry-secret
           containers:
             - name: scraper
               image: docker.io/globoglobitos/price-tracker-scraper:latest
               imagePullPolicy: Always
               env:
+                # Database connection (use existing postgres-secret)
+                - name: DB_HOST
+                  value: "postgres-service"
+                - name: DB_PORT
+                  value: "5432"
+                - name: DB_NAME
+                  value: "price_tracker_db"
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_USER
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
                 - name: SEARCH_TERM
                   value: "Selmer Mark VI"
                 - name: MAX_PAGES
@@ -39,11 +59,13 @@ spec:
                     secretKeyRef:
                       name: scraper-proxy
                       key: http_proxy
+                      optional: true
                 - name: HTTPS_PROXY
                   valueFrom:
                     secretKeyRef:
                       name: scraper-proxy
                       key: https_proxy
+                      optional: true
                 - name: NO_PROXY
                   value: ".svc,.cluster.local,localhost,127.0.0.1"
               resources:

@@ -90,4 +90,4 @@ echo ""
 echo -e "${YELLOW}📋 Verification:${NC}"
 $KUBECTL get secrets -n price-tracker
 echo ""
-echo -e "${GREEN}🎉 You can now run: ./scripts/deploy.sh${NC}" 
+echo -e "${GREEN}🎉 You can now run: ./scripts/deploy-complete.sh${NC}"

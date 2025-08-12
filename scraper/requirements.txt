@@ -4,4 +4,5 @@ beautifulsoup4==4.12.2
 requests==2.31.0
 urllib3==2.1.0
 certifi==2023.7.22
+psycopg2-binary==2.9.7
 

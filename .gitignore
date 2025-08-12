@@ -66,3 +66,6 @@ logs/
 *.secret
 secrets.local.yaml
 k8s/secrets.yaml 
+ 
+# Local-only helpers (ignored)
+local-stuff-ignore/

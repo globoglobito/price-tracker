@@ -85,7 +85,7 @@ chmod +x scripts/*.sh tests/*.sh
 
 ### 4. Deploy Complete System
 ```bash
-# Deploy everything (database + API) with comprehensive testing
+# Deploy everything (database + API + suspended scraper CronJob) with comprehensive testing
 ./scripts/deploy-complete.sh
 ```
 
@@ -124,6 +124,28 @@ We provide essential integration tests to validate your deployment:
 # Run essential tests to verify deployment
 ./database/test_integration.sh && ./api/test_api_integration.sh
 ```
+## 🕒 Scraper CronJob
+
+- The eBay scraper CronJob is applied by the deployment script and is suspended by default.
+- To run a one-off test without enabling the schedule:
+```bash
+microk8s kubectl -n price-tracker create job --from=cronjob/ebay-scraper ebay-scraper-test-$(date +%s)
+```
+- View logs:
+```bash
+microk8s kubectl -n price-tracker logs -l job-name=ebay-scraper-test-<timestamp> | cat
+```
+- Temporarily unsuspend/resuspend the CronJob:
+```bash
+microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspend":false}}'
+sleep 5
+microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspend":true}}'
+```
+
+### Scraper configuration
+- The scraper reads DB connection from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (wired from `postgres-secret`).
+- Proxy is optional. If needed, create `scraper-proxy` with `http_proxy` and `https_proxy` keys. If not present, the scraper runs without proxy.
+- Override search parameters by editing `k8s/cronjob-scraper.yaml` or creating a one-off job and piping modified YAML.
 
 Tests verify:
 - **Database**: Schema, tables, constraints, data operations (20 tests)
