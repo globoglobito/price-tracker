@@ -461,25 +461,45 @@ class EbayBrowserScraper:
 
     def _maybe_enrich_and_snapshot(self, page: Page, listings: List[Dict]) -> None:
         
-        def _human_like_settle() -> None:
-            """Perform a short, human-like settling routine that is resilient in headless mode.
+        def _human_like_settle(max_seconds: float) -> None:
+            """Perform a short, bounded, human-like settling routine.
 
-            Avoids page.mouse.wheel which can occasionally block; instead mixes small delays,
-            gentle mouse moves, keyboard scrolls, and JS scrolls. Keeps overall behavior
-            human-like without hanging.
+            Ensures we never exceed max_seconds. Uses only short, exception-safe
+            interactions and avoids known blocking primitives.
             """
-            # Small idle to mimic reading time
-            time.sleep(0.8 + random.random())
+            start_time = time.perf_counter()
+            # Small idle to mimic reading time (bounded)
             try:
-                iterations = random.randint(2, 4)
+                remaining = max(0.0, max_seconds - (time.perf_counter() - start_time))
+                if remaining <= 0:
+                    return
+                time.sleep(min(0.8 + random.random(), remaining))
+            except Exception:
+                pass
+
+            try:
+                # Attempt a very short network idle wait to nudge stability
+                try:
+                    page.wait_for_load_state("networkidle", timeout=1000)
+                except Exception:
+                    pass
+
+                # Keep iterations small and check time budget frequently
+                iterations = min(3, max(1, random.randint(2, 3)))
                 for i in range(iterations):
+                    if (time.perf_counter() - start_time) >= max_seconds:
+                        break
+
                     # Gentle mouse move to a random viewport point
-                    x = random.randint(80, 900)
-                    y = random.randint(200, 800)
                     try:
-                        page.mouse.move(x, y, steps=random.randint(8, 16))
+                        x = random.randint(80, 900)
+                        y = random.randint(200, 800)
+                        page.mouse.move(x, y, steps=random.randint(6, 12))
                     except Exception:
                         pass
+
+                    if (time.perf_counter() - start_time) >= max_seconds:
+                        break
 
                     # Light keyboard scrolls like a user tapping keys
                     try:
@@ -490,21 +510,40 @@ class EbayBrowserScraper:
                     except Exception:
                         pass
 
+                    if (time.perf_counter() - start_time) >= max_seconds:
+                        break
+
                     # JS-based scroll as a reliable nudge to load lazy content
                     try:
-                        delta = random.randint(200, 600)
+                        delta = random.randint(200, 500)
                         page.evaluate(f"window.scrollBy(0, {delta})")
                     except Exception:
                         pass
 
-                    time.sleep(0.3 + random.random() * 0.5)
-                logger.info(f"Step 4: Human-like settle completed")
+                    # Short, bounded sleep; never exceed budget
+                    try:
+                        remaining = max(0.0, max_seconds - (time.perf_counter() - start_time))
+                        if remaining <= 0:
+                            break
+                        time.sleep(min(0.25 + random.random() * 0.35, remaining))
+                    except Exception:
+                        pass
+
+                elapsed = time.perf_counter() - start_time
+                logger.info(f"Step 4: Human-like settle completed in {elapsed:.2f}s (budget {max_seconds:.2f}s)")
             except Exception as e:
-                logger.info(f"Step 4: Human-like settle partial due to: {e}")
+                elapsed = time.perf_counter() - start_time
+                logger.info(f"Step 4: Human-like settle partial after {elapsed:.2f}s due to: {e}")
 
         # Environment-driven behavior
         snapshot_dir = os.environ.get("SNAPSHOT_DIR")
         enrich_limit = int(os.environ.get("ENRICH_LIMIT", "0"))
+        # Bound or disable settle via env
+        disable_settle_env = os.environ.get("DISABLE_SETTLE", "false").lower() in ("1", "true", "yes")
+        try:
+            human_settle_max_s = float(os.environ.get("HUMAN_SETTLE_MAX_S", "3"))
+        except Exception:
+            human_settle_max_s = 3.0
         allowed_conditions_env = os.environ.get(
             "ALLOWED_CONDITIONS",
             "Used,For parts or not working,Not Specified",
@@ -543,8 +582,11 @@ class EbayBrowserScraper:
                 logger.info(f"Step 2: Page loaded successfully")
                 
                 # Human-like settle to avoid bot detection and prevent hangs in headless
-                logger.info(f"Step 3: Adding human-like delay and settle")
-                _human_like_settle()
+                if disable_settle_env or human_settle_max_s <= 0:
+                    logger.info("Step 3: Human-like settle disabled by env; proceeding")
+                else:
+                    logger.info(f"Step 3: Human-like settle (max {human_settle_max_s:.1f}s)")
+                    _human_like_settle(human_settle_max_s)
                 
                 # Save screenshot and html
                 logger.info(f"Step 5: Preparing to save snapshots")
