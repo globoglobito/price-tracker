@@ -496,48 +496,89 @@ class EbayBrowserScraper:
                 continue
             try:
                 logger.info(f"Enriching listing {idx}/{len(subset)}: {item.get('title', 'Unknown')[:50]}...")
+                logger.info(f"Step 1: Loading page: {url}")
                 page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+                logger.info(f"Step 2: Page loaded successfully")
+                
                 # Mild human-like delay and scroll
+                logger.info(f"Step 3: Adding human-like delay and scroll")
                 time.sleep(0.8 + random.random())
                 try:
                     page.mouse.wheel(0, 600)
-                except Exception:
-                    pass
+                    logger.info(f"Step 4: Mouse scroll completed")
+                except Exception as e:
+                    logger.info(f"Step 4: Mouse scroll failed: {e}")
+                
                 # Save screenshot and html
+                logger.info(f"Step 5: Preparing to save snapshots")
                 base = f"{idx:02d}_" + self._sanitize_filename(item.get("title") or "listing")
                 png_path = os.path.join(snapshot_dir, base + ".png")
                 html_path = os.path.join(snapshot_dir, base + ".html")
+                
+                logger.info(f"Step 6: Taking screenshot")
                 try:
-                    page.screenshot(path=png_path, full_page=True)
-                except Exception:
-                    pass
+                    page.screenshot(path=png_path, full_page=True, timeout=self.screenshot_timeout_ms)
+                    logger.info(f"Step 7: Screenshot saved successfully")
+                except Exception as e:
+                    logger.info(f"Step 7: Screenshot failed: {e}")
+                
+                logger.info(f"Step 8: Saving HTML content")
                 try:
                     with open(html_path, "w", encoding="utf-8") as f:
+                        # Set a shorter timeout for getting page content
+                        page.set_default_timeout(self.content_timeout_ms)
                         f.write(page.content())
-                except Exception:
-                    pass
-                logger.info(f"Saved listing snapshot: {png_path}")
+                        page.set_default_timeout(self.timeout_ms)  # Reset to default
+                    logger.info(f"Step 9: HTML content saved successfully")
+                except Exception as e:
+                    page.set_default_timeout(self.timeout_ms)  # Reset on error too
+                    logger.info(f"Step 9: HTML save failed: {e}")
+                
+                logger.info(f"Step 10: Snapshots complete - {png_path}")
                 # Lightweight enrichment on detail page
+                logger.info(f"Step 11: Starting data extraction")
                 # Shipping cost
-                ship_txt = page.inner_text('body') if page.is_visible('body') else ''
+                logger.info(f"Step 12: Getting page body text")
+                try:
+                    page.set_default_timeout(self.content_timeout_ms)
+                    ship_txt = page.inner_text('body') if page.is_visible('body') else ''
+                    page.set_default_timeout(self.timeout_ms)  # Reset to default
+                    logger.info(f"Step 13: Body text retrieved, length: {len(ship_txt)}")
+                except Exception as e:
+                    page.set_default_timeout(self.timeout_ms)  # Reset on error
+                    ship_txt = ''
+                    logger.info(f"Step 13: Body text failed: {e}")
+                
                 shipping_cost = None
                 try:
-                    for el in page.query_selector_all('span, div')[:1500]:
-                        t = (el.inner_text() or '').strip()
-                        tl = t.lower()
-                        if ('shipping' in tl or 'postage' in tl) and ('handling' not in tl):
-                            if 'free' in tl:
-                                shipping_cost = 0.0
-                                break
-                            m = re.search(r"\$[\d,]+\.?\d*", t)
-                            if m:
-                                try:
-                                    shipping_cost = float(m.group().replace('$', '').replace(',', ''))
+                    logger.info(f"Step 14: Scanning for shipping cost in elements")
+                    page.set_default_timeout(self.content_timeout_ms)
+                    elements = page.query_selector_all('span, div')[:1500]
+                    page.set_default_timeout(self.timeout_ms)  # Reset to default
+                    logger.info(f"Step 15: Found {len(elements)} elements to scan")
+                    for el in elements:
+                        try:
+                            # Add timeout for individual element text extraction
+                            t = (el.inner_text(timeout=self.element_timeout_ms) or '').strip()
+                            tl = t.lower()
+                            if ('shipping' in tl or 'postage' in tl) and ('handling' not in tl):
+                                if 'free' in tl:
+                                    shipping_cost = 0.0
                                     break
-                                except Exception:
-                                    pass
-                except Exception:
-                    pass
+                                m = re.search(r"\$[\d,]+\.?\d*", t)
+                                if m:
+                                    try:
+                                        shipping_cost = float(m.group().replace('$', '').replace(',', ''))
+                                        break
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            # Skip elements that timeout or fail
+                            continue
+                except Exception as e:
+                    page.set_default_timeout(self.timeout_ms)  # Reset on error
+                    logger.info(f"Step 16: Shipping cost extraction failed: {e}")
+                logger.info(f"Step 17: Shipping cost extraction complete: {shipping_cost}")
                 # Location and region
                 location_text = None
                 region = None
@@ -617,6 +658,10 @@ def main() -> None:
     user_data_dir = os.environ.get("USER_DATA_DIR")
     slow_mo_ms = int(os.environ.get("SLOW_MO_MS", "0"))
     debug_snapshot_dir = os.environ.get("DEBUG_SNAPSHOT_DIR")
+    timeout_ms = int(os.environ.get("PAGE_TIMEOUT_MS", "30000"))
+    screenshot_timeout_ms = int(os.environ.get("SCREENSHOT_TIMEOUT_MS", "10000"))
+    content_timeout_ms = int(os.environ.get("CONTENT_TIMEOUT_MS", "5000"))
+    element_timeout_ms = int(os.environ.get("ELEMENT_TIMEOUT_MS", "1000"))
 
     scraper = EbayBrowserScraper(
         search_term=search_term,
@@ -627,7 +672,12 @@ def main() -> None:
         user_data_dir=user_data_dir,
         slow_mo_ms=slow_mo_ms,
         debug_snapshot_dir=debug_snapshot_dir,
+        timeout_ms=timeout_ms,
     )
+    # Store additional timeout values for enrichment
+    scraper.screenshot_timeout_ms = screenshot_timeout_ms
+    scraper.content_timeout_ms = content_timeout_ms
+    scraper.element_timeout_ms = element_timeout_ms
     listings = scraper.scrape()
 
     print(f"\nFound {len(listings)} listings")
