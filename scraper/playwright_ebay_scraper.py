@@ -495,7 +495,8 @@ class EbayBrowserScraper:
             if not url:
                 continue
             try:
-                page.goto(url, wait_until="domcontentloaded")
+                logger.info(f"Enriching listing {idx}/{len(subset)}: {item.get('title', 'Unknown')[:50]}...")
+                page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
                 # Mild human-like delay and scroll
                 time.sleep(0.8 + random.random())
                 try:
@@ -593,7 +594,11 @@ class EbayBrowserScraper:
                 # Small cooldown
                 time.sleep(1.0 + random.random())
             except Exception as e:
-                logger.warning(f"Enrichment failed for {url}: {e}")
+                if "timeout" in str(e).lower() or "timeouterror" in str(type(e).__name__).lower():
+                    logger.warning(f"Enrichment timeout for listing {idx}/{len(subset)} ({url}): {e}")
+                    logger.warning(f"Continuing to next listing after timeout...")
+                else:
+                    logger.warning(f"Enrichment failed for listing {idx}/{len(subset)} ({url}): {e}")
         # DB upsert if available
         if upsert_listings:
             try:

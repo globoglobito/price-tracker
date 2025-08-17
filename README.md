@@ -147,6 +147,17 @@ microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspe
 - Proxy is optional. If needed, create `scraper-proxy` with `http_proxy` and `https_proxy` keys. If not present, the scraper runs without proxy.
 - Override search parameters by editing `k8s/cronjob-scraper.yaml` or creating a one-off job and piping modified YAML.
 
+### Browser Profile & Bot Detection Avoidance
+- **Critical**: The scraper uses `USER_DATA_DIR=/tmp/profile-ebay` to maintain a persistent browser profile during scraping sessions
+- **Why it matters**: eBay's bot detection is highly sensitive to fresh browser sessions without cookies/history
+- **Profile benefits**:
+  - Establishes consistent browser fingerprint and session data
+  - Stores cookies and browsing history that make the scraper appear as a returning user
+  - Significantly reduces bot detection triggers
+  - Improves scraping success rate and listing discovery
+- **Database saving requirement**: Set `ENRICH_LIMIT > 0` and `SNAPSHOT_DIR` to enable the database persistence code path
+- **Without proper profile**: Scraper may return 0 listings due to bot detection, even though the search logic is correct
+
 Tests verify:
 - **Database**: Schema, tables, constraints, data operations (20 tests)
 - **API**: Health endpoints, CRUD operations, error handling (15 tests)
