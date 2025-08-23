@@ -142,6 +142,13 @@ sleep 5
 microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspend":true}}'
 ```
 
+### Persistent mounts (MicroK8s)
+- For convenience in MicroK8s, the CronJob mounts host paths under `/var/snap/microk8s/common/price-tracker`:
+  - Debug snapshots: `/var/snap/microk8s/common/price-tracker/debug` (ENV `DEBUG_SNAPSHOT_DIR=/tmp/debug`)
+  - Listing snapshots: `/var/snap/microk8s/common/price-tracker/snapshots` (ENV `SNAPSHOT_DIR=/tmp/snapshots`)
+  - Browser profile: `/var/snap/microk8s/common/price-tracker/profile-ebay` (ENV `USER_DATA_DIR=/tmp/profile-ebay`)
+  These paths are configured in `k8s/cronjob-scraper.yaml` and persist across Jobs.
+
 ### Scraper configuration
 - The scraper reads DB connection from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (wired from `postgres-secret`).
 - Proxy is optional. If needed, create `scraper-proxy` with `http_proxy` and `https_proxy` keys. If not present, the scraper runs without proxy.
@@ -157,6 +164,15 @@ microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspe
   - Improves scraping success rate and listing discovery
 - **Database saving requirement**: Set `ENRICH_LIMIT > 0` and `SNAPSHOT_DIR` to enable the database persistence code path
 - **Without proper profile**: Scraper may return 0 listings due to bot detection, even though the search logic is correct
+
+### Incremental scraping behavior
+- The scraper links listings to a `search_id` and performs incremental updates:
+  - New `listing_id`s are upserted; previously seen ones are refreshed
+  - Missing `listing_id`s from a run are marked inactive (`is_active=false`, `ended_at` timestamp)
+  - Lifecycle fields on `price_tracker.listings`: `first_seen_at`, `last_seen_at`, `is_active`, `ended_at`
+  - Toggle behavior via envs (optional):
+    - `SEARCH_TERM` (default: "Selmer Mark VI")
+    - `ENRICH_LIMIT` (number of detail pages to snapshot/enrich)
 
 Tests verify:
 - **Database**: Schema, tables, constraints, data operations (20 tests)

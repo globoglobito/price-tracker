@@ -20,6 +20,8 @@ spec:
             app: price-tracker
             component: scraper
         spec:
+          securityContext:
+            fsGroup: 1001
           restartPolicy: Never
           imagePullSecrets:
             - name: docker-registry-secret
@@ -93,14 +95,14 @@ spec:
           volumes:
             - name: debug-dir
               hostPath:
-                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
+                path: /var/snap/microk8s/common/price-tracker/debug
                 type: DirectoryOrCreate
             - name: snapshots-dir
               hostPath:
-                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/snapshots
+                path: /var/snap/microk8s/common/price-tracker/snapshots
                 type: DirectoryOrCreate
             - name: profile-dir
               hostPath:
-                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
+                path: /var/snap/microk8s/common/price-tracker/profile-ebay
                 type: DirectoryOrCreate
 

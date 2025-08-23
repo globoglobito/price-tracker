@@ -74,16 +74,15 @@ CREATE TABLE price_tracker.listings (
     -- Auction/sale specific fields
     has_best_offer BOOLEAN DEFAULT FALSE,
     auction_end_time TIMESTAMP,
-    watchers_count INTEGER,
     sold_quantity INTEGER,
-    available_quantity INTEGER,
     
     -- Timestamps
     date_listed TIMESTAMP,
     scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Metadata
-    notes TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    first_seen_at TIMESTAMP,
+    last_seen_at TIMESTAMP,
+    ended_at TIMESTAMP,
     
     -- Ensure unique listings per website
     UNIQUE(website, listing_id)
@@ -109,10 +108,11 @@ CREATE TABLE price_tracker.listings (
 - `shipping_cost`: Shipping cost if available
 - `has_best_offer`: Whether listing accepts best offers
 - `auction_end_time`: For auction listings
-- `watchers_count`: Number of people watching
-- `sold_quantity` & `available_quantity`: For multi-quantity listings
+- `sold_quantity`: For multi-quantity listings
 - `date_listed`: When item was originally listed
-- `notes`: Additional metadata
+- `is_active`: Whether the listing is currently active
+- `first_seen_at` / `last_seen_at`: Lifecycle tracking for incremental scrapes
+- `ended_at`: When the listing was marked inactive
 
 ## Usage Examples
 
@@ -121,12 +121,12 @@ CREATE TABLE price_tracker.listings (
 INSERT INTO price_tracker.listings (
     title, price, url, website, scraped_at,
     brand, model, type, condition, seller_location,
-    currency, shipping_cost, has_best_offer, watchers_count
+    currency, shipping_cost, has_best_offer
 ) VALUES (
     'YAMAHA YTS-61S Tenor Saxophone - Excellent Condition', 2400.00,
     'https://www.ebay.com/itm/357413100867', 'ebay', NOW(),
     'Yamaha', 'YTS-61S', 'Tenor', 'Used', 'Fukuoka Ken, Japan',
-    'USD', 25.00, true, 12
+    'USD', 25.00, true
 );
 ```
 
