@@ -68,6 +68,13 @@ spec:
                       optional: true
                 - name: NO_PROXY
                   value: ".svc,.cluster.local,localhost,127.0.0.1"
+                # Local persistence for snapshots and browser profile
+                - name: DEBUG_SNAPSHOT_DIR
+                  value: "/tmp/debug"
+                - name: SNAPSHOT_DIR
+                  value: "/tmp/snapshots"
+                - name: USER_DATA_DIR
+                  value: "/tmp/profile-ebay"
               resources:
                 requests:
                   cpu: "250m"
@@ -75,4 +82,25 @@ spec:
                 limits:
                   cpu: "500m"
                   memory: "1Gi"
+              volumeMounts:
+                - name: debug-dir
+                  mountPath: /tmp/debug
+                - name: snapshots-dir
+                  mountPath: /tmp/snapshots
+                - name: profile-dir
+                  mountPath: /tmp/profile-ebay
+
+          volumes:
+            - name: debug-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
+                type: DirectoryOrCreate
+            - name: snapshots-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/snapshots
+                type: DirectoryOrCreate
+            - name: profile-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
+                type: DirectoryOrCreate
 
