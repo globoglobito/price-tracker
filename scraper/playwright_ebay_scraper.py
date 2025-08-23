@@ -23,10 +23,6 @@ import pathlib
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 try:
-    from playwright_stealth import stealth_sync
-except Exception:
-    stealth_sync = None  # Optional dependency
-try:
     from scraper.db import upsert_listings
 except Exception:
     upsert_listings = None
@@ -417,12 +413,7 @@ class EbayBrowserScraper:
                         device_descriptor = p.devices.get(device_name_env)
                     context = self._new_context(browser, device=device_descriptor)
                     page = context.new_page()
-                # Apply stealth if available
-                if stealth_sync is not None:
-                    try:
-                        stealth_sync(page)
-                    except Exception:
-                        pass
+                # Stealth plugin removed to simplify dependencies and avoid import issues
                 # Light human-like activity to warm up session
                 try:
                     page.goto("https://www.ebay.com/", wait_until="domcontentloaded")
@@ -461,36 +452,28 @@ class EbayBrowserScraper:
 
     def _maybe_enrich_and_snapshot(self, page: Page, listings: List[Dict]) -> None:
         
-        def _human_like_settle(max_seconds: float) -> None:
-            """Perform a short, bounded, human-like settling routine.
+        def _human_like_settle(min_seconds: float, max_seconds: float) -> None:
+            """Perform a short, bounded, human-like settling routine without blocking calls.
 
-            Ensures we never exceed max_seconds. Uses only short, exception-safe
-            interactions and avoids known blocking primitives.
+            Guarantees total duration in the [min_seconds, max_seconds] window by
+            enforcing an upper time budget and topping up to the minimum if needed.
             """
             start_time = time.perf_counter()
-            # Small idle to mimic reading time (bounded)
+            timed_out = False
             try:
-                remaining = max(0.0, max_seconds - (time.perf_counter() - start_time))
-                if remaining <= 0:
-                    return
-                time.sleep(min(0.8 + random.random(), remaining))
-            except Exception:
-                pass
-
-            try:
-                # Attempt a very short network idle wait to nudge stability
-                try:
-                    page.wait_for_load_state("networkidle", timeout=1000)
-                except Exception:
-                    pass
+                # Small idle to mimic reading time (bounded)
+                remaining_to_max = max(0.0, max_seconds - (time.perf_counter() - start_time))
+                if remaining_to_max > 0:
+                    time.sleep(min(0.4, remaining_to_max))
 
                 # Keep iterations small and check time budget frequently
-                iterations = min(3, max(1, random.randint(2, 3)))
+                iterations = 3
                 for i in range(iterations):
                     if (time.perf_counter() - start_time) >= max_seconds:
+                        timed_out = True
                         break
 
-                    # Gentle mouse move to a random viewport point
+                    # Gentle mouse move to a random viewport point (ignore failures)
                     try:
                         x = random.randint(80, 900)
                         y = random.randint(200, 800)
@@ -499,6 +482,7 @@ class EbayBrowserScraper:
                         pass
 
                     if (time.perf_counter() - start_time) >= max_seconds:
+                        timed_out = True
                         break
 
                     # Light keyboard scrolls like a user tapping keys
@@ -511,6 +495,7 @@ class EbayBrowserScraper:
                         pass
 
                     if (time.perf_counter() - start_time) >= max_seconds:
+                        timed_out = True
                         break
 
                     # JS-based scroll as a reliable nudge to load lazy content
@@ -521,19 +506,29 @@ class EbayBrowserScraper:
                         pass
 
                     # Short, bounded sleep; never exceed budget
+                    remaining_to_max = max(0.0, max_seconds - (time.perf_counter() - start_time))
+                    if remaining_to_max <= 0:
+                        timed_out = True
+                        break
                     try:
-                        remaining = max(0.0, max_seconds - (time.perf_counter() - start_time))
-                        if remaining <= 0:
-                            break
-                        time.sleep(min(0.25 + random.random() * 0.35, remaining))
+                        time.sleep(min(0.25, remaining_to_max))
                     except Exception:
                         pass
-
+            finally:
                 elapsed = time.perf_counter() - start_time
-                logger.info(f"Step 4: Human-like settle completed in {elapsed:.2f}s (budget {max_seconds:.2f}s)")
-            except Exception as e:
-                elapsed = time.perf_counter() - start_time
-                logger.info(f"Step 4: Human-like settle partial after {elapsed:.2f}s due to: {e}")
+                # If ended sooner than min_seconds, top up to min within the max budget
+                if elapsed < min_seconds and not timed_out:
+                    top_up = min(min_seconds - elapsed, max(0.0, max_seconds - elapsed))
+                    if top_up > 0:
+                        try:
+                            time.sleep(top_up)
+                        except Exception:
+                            pass
+                    elapsed = time.perf_counter() - start_time
+                if timed_out or elapsed >= max_seconds - 1e-3:
+                    logger.info(f"Step 4: Human-like settle ended by time budget at {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)")
+                else:
+                    logger.info(f"Step 4: Human-like settle completed in {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)")
 
         # Environment-driven behavior
         snapshot_dir = os.environ.get("SNAPSHOT_DIR")
@@ -541,9 +536,18 @@ class EbayBrowserScraper:
         # Bound or disable settle via env
         disable_settle_env = os.environ.get("DISABLE_SETTLE", "false").lower() in ("1", "true", "yes")
         try:
-            human_settle_max_s = float(os.environ.get("HUMAN_SETTLE_MAX_S", "3"))
+            human_settle_min_s = float(os.environ.get("HUMAN_SETTLE_MIN_S", "2"))
         except Exception:
-            human_settle_max_s = 3.0
+            human_settle_min_s = 2.0
+        try:
+            human_settle_max_s = float(os.environ.get("HUMAN_SETTLE_MAX_S", "8"))
+        except Exception:
+            human_settle_max_s = 8.0
+        # Ensure sane bounds
+        if human_settle_min_s < 0:
+            human_settle_min_s = 0.0
+        if human_settle_max_s < human_settle_min_s:
+            human_settle_max_s = human_settle_min_s
         allowed_conditions_env = os.environ.get(
             "ALLOWED_CONDITIONS",
             "Used,For parts or not working,Not Specified",
@@ -585,8 +589,8 @@ class EbayBrowserScraper:
                 if disable_settle_env or human_settle_max_s <= 0:
                     logger.info("Step 3: Human-like settle disabled by env; proceeding")
                 else:
-                    logger.info(f"Step 3: Human-like settle (max {human_settle_max_s:.1f}s)")
-                    _human_like_settle(human_settle_max_s)
+                    logger.info(f"Step 3: Human-like settle (min {human_settle_min_s:.1f}s, max {human_settle_max_s:.1f}s)")
+                    _human_like_settle(human_settle_min_s, human_settle_max_s)
                 
                 # Save screenshot and html
                 logger.info(f"Step 5: Preparing to save snapshots")
@@ -711,8 +715,8 @@ class EbayBrowserScraper:
                     item['location_text'] = location_text
                 if region:
                     item['region'] = region
-                # Small cooldown
-                time.sleep(1.0 + random.random())
+                # Small deterministic cooldown (kept short)
+                time.sleep(0.3)
             except Exception as e:
                 if "timeout" in str(e).lower() or "timeouterror" in str(type(e).__name__).lower():
                     logger.warning(f"Enrichment timeout for listing {idx}/{len(subset)} ({url}): {e}")
