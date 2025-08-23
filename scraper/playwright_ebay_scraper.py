@@ -12,7 +12,7 @@ Usage (local):
   3) python scraper/playwright_ebay_scraper.py
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
 import os
@@ -21,11 +21,14 @@ import time
 import random
 import pathlib
 
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+import importlib
 try:
-    from scraper.db import upsert_listings
+    from scraper.db import upsert_listings, get_or_create_search, fetch_existing_listing_ids, mark_missing_inactive
 except Exception:
     upsert_listings = None
+    get_or_create_search = None
+    fetch_existing_listing_ids = None
+    mark_missing_inactive = None
 
 
 logging.basicConfig(level=logging.INFO)
@@ -84,7 +87,7 @@ class EbayBrowserScraper:
         query = "&".join([f"{k}={v}" for k, v in params.items()])
         return f"{base_url}?{query}"
 
-    def _new_context(self, browser: Browser, device: Optional[Dict] = None) -> BrowserContext:
+    def _new_context(self, browser: Any, device: Optional[Dict] = None) -> Any:
         chrome_major = random.choice([121, 122, 123, 124, 125])
         if self.browser_name == "firefox":
             user_agent = (
@@ -150,7 +153,7 @@ class EbayBrowserScraper:
         )
         return context
 
-    def _is_block_page(self, page: Page) -> bool:
+    def _is_block_page(self, page: Any) -> bool:
         text = page.content().lower()
         block_markers = [
             "verify you're a human",
@@ -161,7 +164,7 @@ class EbayBrowserScraper:
         ]
         return any(marker in text for marker in block_markers)
 
-    def _snapshot_debug(self, page: Page, label: str) -> None:
+    def _snapshot_debug(self, page: Any, label: str) -> None:
         if not self.debug_snapshot_dir:
             return
         try:
@@ -183,7 +186,7 @@ class EbayBrowserScraper:
         except Exception:
             pass
 
-    def _parse_listing_elements(self, page: Page) -> List[Dict]:
+    def _parse_listing_elements(self, page: Any) -> List[Dict]:
         items = page.query_selector_all(".s-item")
         listings: List[Dict] = []
         for item in items:
@@ -278,7 +281,7 @@ class EbayBrowserScraper:
 
         return listings
 
-    def _accept_cookies_if_present(self, page: Page) -> None:
+    def _accept_cookies_if_present(self, page: Any) -> None:
         try:
             # Common eBay cookie banners
             candidates = [
@@ -300,7 +303,7 @@ class EbayBrowserScraper:
         except Exception:
             pass
 
-    def _perform_search_flow(self, page: Page) -> None:
+    def _perform_search_flow(self, page: Any) -> None:
         logger.info("Opening eBay home and performing search via UI flow")
         page.goto("https://www.ebay.com/", wait_until="domcontentloaded")
         self._accept_cookies_if_present(page)
@@ -335,7 +338,7 @@ class EbayBrowserScraper:
         except Exception:
             pass
 
-    def scrape_page(self, page_num: int, page: Page) -> List[Dict]:
+    def scrape_page(self, page_num: int, page: Any) -> List[Dict]:
         # For first page, prefer UI-based navigation to get cookies/session
         if page_num == 1 and "ebay.com/sch/" not in page.url:
             self._perform_search_flow(page)
@@ -371,7 +374,8 @@ class EbayBrowserScraper:
 
     def scrape(self) -> List[Dict]:
         results: List[Dict] = []
-        with sync_playwright() as p:
+        sp = importlib.import_module("playwright.sync_api").sync_playwright
+        with sp() as p:
             browser_args = [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
@@ -432,6 +436,20 @@ class EbayBrowserScraper:
                         time.sleep(delay)
                 # Optional enrichment and snapshots for a small subset
                 self._maybe_enrich_and_snapshot(page, results)
+                # Incremental DB operations
+                if upsert_listings and get_or_create_search and fetch_existing_listing_ids and mark_missing_inactive:
+                    try:
+                        website = "ebay"
+                        search_id = get_or_create_search(self.search_term, website)
+                        # Upsert all parsed listings with search_id
+                        upsert_count = upsert_listings(results, search_id=search_id)
+                        logger.info(f"Upserted {upsert_count} listings into DB (with search_id)")
+                        # Mark missing as inactive based on listing_id set
+                        active_ids = {l.get("listing_id") for l in results if l.get("listing_id")}
+                        changed = mark_missing_inactive(search_id, website, active_ids)
+                        logger.info(f"Marked {changed} listings inactive (missing this run)")
+                    except Exception as e:
+                        logger.warning(f"Incremental DB update failed: {e}")
             finally:
                 try:
                     if context:
@@ -450,7 +468,7 @@ class EbayBrowserScraper:
         text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)[:100]
         return text or "listing"
 
-    def _maybe_enrich_and_snapshot(self, page: Page, listings: List[Dict]) -> None:
+    def _maybe_enrich_and_snapshot(self, page: Any, listings: List[Dict]) -> None:
         
         def _human_like_settle(min_seconds: float, max_seconds: float) -> None:
             """Perform a short, bounded, human-like settling routine without blocking calls.
