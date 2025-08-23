@@ -735,6 +735,94 @@ class EbayBrowserScraper:
                     item['region'] = region
                 # Small deterministic cooldown (kept short)
                 time.sleep(0.3)
+
+                # Detect Best Offer availability
+                try:
+                    has_best_offer = False
+                    try:
+                        # Buttons/links typically present on OBO listings
+                        if page.locator("button:has-text('Make offer')").count() > 0:
+                            has_best_offer = True
+                        elif page.locator("button:has-text('Make Offer')").count() > 0:
+                            has_best_offer = True
+                        elif page.locator("a:has-text('Make offer')").count() > 0:
+                            has_best_offer = True
+                        elif page.locator("a:has-text('Make Offer')").count() > 0:
+                            has_best_offer = True
+                    except Exception:
+                        pass
+                    if not has_best_offer:
+                        # Fallback: scan body text for "Best Offer"
+                        try:
+                            txt = (page.inner_text('body') or '').lower()
+                            if 'best offer' in txt:
+                                has_best_offer = True
+                        except Exception:
+                            pass
+                    if has_best_offer:
+                        item['has_best_offer'] = True
+                except Exception:
+                    pass
+
+                # Detect auction end time (best-effort)
+                try:
+                    detected_end: Optional[str] = None
+                    # Try JSON-LD offers
+                    try:
+                        handles = page.query_selector_all("script[type='application/ld+json']")
+                        for h in handles:
+                            try:
+                                raw = h.inner_text() or ''
+                                import json as _json
+                                data = _json.loads(raw)
+                                def _walk(obj):
+                                    nonlocal detected_end
+                                    if detected_end:
+                                        return
+                                    if isinstance(obj, dict):
+                                        for k, v in obj.items():
+                                            if isinstance(v, (dict, list)):
+                                                _walk(v)
+                                            elif isinstance(v, str) and k in ("endDate", "availabilityEnds") and not detected_end:
+                                                detected_end = v
+                                    elif isinstance(obj, list):
+                                        for it in obj:
+                                            _walk(it)
+                                _walk(data)
+                                if detected_end:
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+
+                    # Try DOM attributes commonly used for timers
+                    if not detected_end:
+                        try:
+                            cand = page.query_selector('div#vi-cdown')
+                            if cand:
+                                v = cand.get_attribute('data-end-date') or cand.get_attribute('data-endtime')
+                                if v:
+                                    detected_end = v
+                        except Exception:
+                            pass
+
+                    # Parse and store if seemingly ISO-like
+                    if detected_end:
+                        try:
+                            from datetime import datetime
+                            iso = detected_end.strip().replace('Z', '+00:00')
+                            dt = None
+                            try:
+                                dt = datetime.fromisoformat(iso)
+                            except Exception:
+                                dt = None
+                            if dt:
+                                item['auction_end_time'] = dt.isoformat()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
             except Exception as e:
                 if "timeout" in str(e).lower() or "timeouterror" in str(type(e).__name__).lower():
                     logger.warning(f"Enrichment timeout for listing {idx}/{len(subset)} ({url}): {e}")
