@@ -472,94 +472,67 @@ class EbayBrowserScraper:
     def _maybe_enrich_and_snapshot(self, page: Any, listings: List[Dict]) -> None:
         
         def _human_like_settle(min_seconds: float, max_seconds: float) -> None:
-            """Perform human-like interactions with a hard timeout; proceed to next listing if exceeded."""
+            """Human-like settle with per-step time checks to enforce max duration.
+
+            Keeps interactions (mouse/keys/JS) but checks elapsed after EVERY micro-step
+            and immediately exits once max_seconds is reached. Ensures at least
+            min_seconds of total elapsed time by topping up with a short sleep if needed.
+            """
             start_time = time.perf_counter()
 
-            def _timeout_handler(signum, frame):
-                raise TimeoutError("settle timed out")
+            def elapsed() -> float:
+                return time.perf_counter() - start_time
 
-            old_handler = signal.getsignal(signal.SIGALRM)
-            try:
-                # Arm a real-time timer to interrupt any blocking call
+            # Small initial idle without blocking browser events
+            time.sleep(min(0.3, max_seconds))
+
+            # Perform a few tiny human-like nudges with strict elapsed checks
+            for i in range(3):
+                if elapsed() >= max_seconds:
+                    break
+
+                # Mouse move (best-effort)
                 try:
-                    signal.setitimer(signal.ITIMER_REAL, max_seconds)
-                    signal.signal(signal.SIGALRM, _timeout_handler)
-                except Exception:
-                    # Fallback to coarse alarm if setitimer unavailable
-                    try:
-                        signal.signal(signal.SIGALRM, _timeout_handler)
-                        signal.alarm(int(max(1, int(max_seconds))))
-                    except Exception:
-                        pass
-
-                # Small idle
-                time.sleep(min(0.4, max_seconds))
-
-                # Iterative, small interactions; each wrapped in best-effort try blocks
-                iterations = 3
-                for i in range(iterations):
-                    # Respect minimum time first
-                    if (time.perf_counter() - start_time) < min_seconds:
-                        time.sleep(0.2)
-
-                    # Mouse move
-                    try:
-                        x = random.randint(80, 900)
-                        y = random.randint(200, 800)
-                        page.mouse.move(x, y, steps=random.randint(6, 12))
-                    except Exception:
-                        pass
-
-                    # Key taps
-                    try:
-                        if i == 0:
-                            page.keyboard.press("PageDown")
-                        elif random.random() < 0.6:
-                            page.keyboard.press("ArrowDown")
-                    except Exception:
-                        pass
-
-                    # JS scroll (non-blocking best-effort)
-                    try:
-                        delta = random.randint(200, 500)
-                        page.evaluate("window.requestAnimationFrame(() => window.scrollBy(0, arguments[0]));", delta)
-                    except Exception:
-                        pass
-
-                    # Leave room for timer to interrupt
-                    time.sleep(0.2)
-
-            except TimeoutError:
-                elapsed = time.perf_counter() - start_time
-                logger.info(
-                    f"Step 4: Human-like settle aborted by timeout at {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
-                )
-            finally:
-                # Disarm timers and restore handler
-                try:
-                    signal.setitimer(signal.ITIMER_REAL, 0)
-                except Exception:
-                    try:
-                        signal.alarm(0)
-                    except Exception:
-                        pass
-                try:
-                    signal.signal(signal.SIGALRM, old_handler)
+                    x = random.randint(80, 900)
+                    y = random.randint(200, 800)
+                    page.mouse.move(x, y, steps=random.randint(6, 12))
                 except Exception:
                     pass
-                elapsed = time.perf_counter() - start_time
-                if elapsed < min_seconds:
-                    # Top up to min if we returned too quickly (without exceeding max)
-                    top_up = min(min_seconds - elapsed, max(0.0, max_seconds - elapsed))
-                    if top_up > 0:
-                        try:
-                            time.sleep(top_up)
-                        except Exception:
-                            pass
-                    elapsed = time.perf_counter() - start_time
-                logger.info(
-                    f"Step 4: Human-like settle completed in {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
-                )
+                if elapsed() >= max_seconds:
+                    break
+
+                # Key taps (best-effort)
+                try:
+                    if i == 0:
+                        page.keyboard.press("PageDown")
+                    elif random.random() < 0.6:
+                        page.keyboard.press("ArrowDown")
+                except Exception:
+                    pass
+                if elapsed() >= max_seconds:
+                    break
+
+                # JS scroll using rAF to avoid sync layout
+                try:
+                    delta = random.randint(200, 500)
+                    page.evaluate("window.requestAnimationFrame(() => window.scrollBy(0, arguments[0]));", delta)
+                except Exception:
+                    pass
+                if elapsed() >= max_seconds:
+                    break
+
+                # Brief pause
+                time.sleep(0.2)
+
+            # Top up to min_seconds if we finished too quickly, without exceeding max
+            if elapsed() < min_seconds:
+                top_up = min(min_seconds - elapsed(), max(0.0, max_seconds - elapsed()))
+                if top_up > 0:
+                    time.sleep(top_up)
+
+            logger.info(
+                f"Step 4: Human-like settle completed in {elapsed():.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
+            )
 
         # Environment-driven behavior
         snapshot_dir = os.environ.get("SNAPSHOT_DIR")
