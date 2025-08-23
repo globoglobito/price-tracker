@@ -13,6 +13,7 @@ Usage (local):
 """
 
 from typing import Dict, List, Optional, Any
+import signal
 from datetime import datetime
 import logging
 import os
@@ -471,27 +472,37 @@ class EbayBrowserScraper:
     def _maybe_enrich_and_snapshot(self, page: Any, listings: List[Dict]) -> None:
         
         def _human_like_settle(min_seconds: float, max_seconds: float) -> None:
-            """Perform a short, bounded, human-like settling routine without blocking calls.
-
-            Guarantees total duration in the [min_seconds, max_seconds] window by
-            enforcing an upper time budget and topping up to the minimum if needed.
-            """
+            """Perform human-like interactions with a hard timeout; proceed to next listing if exceeded."""
             start_time = time.perf_counter()
-            timed_out = False
-            try:
-                # Small idle to mimic reading time (bounded)
-                remaining_to_max = max(0.0, max_seconds - (time.perf_counter() - start_time))
-                if remaining_to_max > 0:
-                    time.sleep(min(0.4, remaining_to_max))
 
-                # Keep iterations small and check time budget frequently
+            def _timeout_handler(signum, frame):
+                raise TimeoutError("settle timed out")
+
+            old_handler = signal.getsignal(signal.SIGALRM)
+            try:
+                # Arm a real-time timer to interrupt any blocking call
+                try:
+                    signal.setitimer(signal.ITIMER_REAL, max_seconds)
+                    signal.signal(signal.SIGALRM, _timeout_handler)
+                except Exception:
+                    # Fallback to coarse alarm if setitimer unavailable
+                    try:
+                        signal.signal(signal.SIGALRM, _timeout_handler)
+                        signal.alarm(int(max(1, int(max_seconds))))
+                    except Exception:
+                        pass
+
+                # Small idle
+                time.sleep(min(0.4, max_seconds))
+
+                # Iterative, small interactions; each wrapped in best-effort try blocks
                 iterations = 3
                 for i in range(iterations):
-                    if (time.perf_counter() - start_time) >= max_seconds:
-                        timed_out = True
-                        break
+                    # Respect minimum time first
+                    if (time.perf_counter() - start_time) < min_seconds:
+                        time.sleep(0.2)
 
-                    # Gentle mouse move to a random viewport point (ignore failures)
+                    # Mouse move
                     try:
                         x = random.randint(80, 900)
                         y = random.randint(200, 800)
@@ -499,11 +510,7 @@ class EbayBrowserScraper:
                     except Exception:
                         pass
 
-                    if (time.perf_counter() - start_time) >= max_seconds:
-                        timed_out = True
-                        break
-
-                    # Light keyboard scrolls like a user tapping keys
+                    # Key taps
                     try:
                         if i == 0:
                             page.keyboard.press("PageDown")
@@ -512,30 +519,37 @@ class EbayBrowserScraper:
                     except Exception:
                         pass
 
-                    if (time.perf_counter() - start_time) >= max_seconds:
-                        timed_out = True
-                        break
-
-                    # JS-based scroll as a reliable nudge to load lazy content
+                    # JS scroll (non-blocking best-effort)
                     try:
                         delta = random.randint(200, 500)
-                        page.evaluate(f"window.scrollBy(0, {delta})")
+                        page.evaluate("window.requestAnimationFrame(() => window.scrollBy(0, arguments[0]));", delta)
                     except Exception:
                         pass
 
-                    # Short, bounded sleep; never exceed budget
-                    remaining_to_max = max(0.0, max_seconds - (time.perf_counter() - start_time))
-                    if remaining_to_max <= 0:
-                        timed_out = True
-                        break
+                    # Leave room for timer to interrupt
+                    time.sleep(0.2)
+
+            except TimeoutError:
+                elapsed = time.perf_counter() - start_time
+                logger.info(
+                    f"Step 4: Human-like settle aborted by timeout at {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
+                )
+            finally:
+                # Disarm timers and restore handler
+                try:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                except Exception:
                     try:
-                        time.sleep(min(0.25, remaining_to_max))
+                        signal.alarm(0)
                     except Exception:
                         pass
-            finally:
+                try:
+                    signal.signal(signal.SIGALRM, old_handler)
+                except Exception:
+                    pass
                 elapsed = time.perf_counter() - start_time
-                # If ended sooner than min_seconds, top up to min within the max budget
-                if elapsed < min_seconds and not timed_out:
+                if elapsed < min_seconds:
+                    # Top up to min if we returned too quickly (without exceeding max)
                     top_up = min(min_seconds - elapsed, max(0.0, max_seconds - elapsed))
                     if top_up > 0:
                         try:
@@ -543,10 +557,9 @@ class EbayBrowserScraper:
                         except Exception:
                             pass
                     elapsed = time.perf_counter() - start_time
-                if timed_out or elapsed >= max_seconds - 1e-3:
-                    logger.info(f"Step 4: Human-like settle ended by time budget at {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)")
-                else:
-                    logger.info(f"Step 4: Human-like settle completed in {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)")
+                logger.info(
+                    f"Step 4: Human-like settle completed in {elapsed:.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
+                )
 
         # Environment-driven behavior
         snapshot_dir = os.environ.get("SNAPSHOT_DIR")
