@@ -75,6 +75,9 @@ class EbayBrowserScraper:
         self.debug_snapshot_dir = debug_snapshot_dir
         self.user_data_dir = user_data_dir
         self.slow_mo_ms = slow_mo_ms
+        # Track last results page URL and load time for referer-aware enrichment and delay
+        self._last_results_url: Optional[str] = None
+        self._last_results_loaded_at: Optional[float] = None
 
     def _build_search_url(self, page_number: int) -> str:
         base_url = "https://www.ebay.com/sch/i.html"
@@ -154,16 +157,92 @@ class EbayBrowserScraper:
         )
         return context
 
+    def _clean_ebay_url(self, url: Optional[str]) -> Optional[str]:
+        """Return canonical https://www.ebay.com/itm/<id> if an item id is present."""
+        if not url:
+            return url
+        try:
+            import re as _re
+            m = _re.search(r"/itm/(\d+)", url)
+            if m:
+                return f"https://www.ebay.com/itm/{m.group(1)}"
+        except Exception:
+            pass
+        return url
+
+    def _navigate_to_listing(self, page: Any, item: Dict, nav_mode: str) -> None:
+        """Navigate to a listing detail page using click-through when possible.
+
+        Falls back to direct goto with an appropriate Referer header.
+        """
+        url = item.get("url")
+        listing_id = item.get("listing_id")
+        # Small human-like pause before navigation
+        time.sleep(0.4 + random.random() * 0.5)
+        # Try click-through if requested/auto and we can find the anchor on the page
+        if nav_mode in ("click", "auto") and listing_id:
+            try:
+                anchor = page.locator(f"a[href*='/itm/{listing_id}']")
+                if anchor.count() > 0:
+                    try:
+                        anchor.first.scroll_into_view_if_needed(timeout=2000)
+                    except Exception:
+                        pass
+                    try:
+                        page.mouse.move(200 + random.randint(0, 200), 200 + random.randint(0, 200))
+                    except Exception:
+                        pass
+                    anchor.first.click(timeout=self.timeout_ms)
+                    page.wait_for_load_state("domcontentloaded", timeout=self.timeout_ms)
+                    return
+            except Exception:
+                # Fall through to goto
+                pass
+        # Fallback: direct navigation with referer
+        referer = self._last_results_url or "https://www.ebay.com/"
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms, referer=referer)
+        except TypeError:
+            # Some Playwright versions may not accept referer kwarg here; degrade gracefully
+            page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+
     def _is_block_page(self, page: Any) -> bool:
-        text = page.content().lower()
-        block_markers = [
+        """Detect anti-bot challenge using visible body text and strong structural hints.
+
+        Avoid scanning raw HTML for generic tokens (like CSS class names) to reduce false positives.
+        """
+        body_text = ""
+        try:
+            # Only visible text content
+            if page.is_visible('body'):
+                body_text = (page.inner_text('body') or "").lower()
+        except Exception:
+            body_text = ""
+
+        # Strong textual markers typically shown to users
+        text_markers = [
             "verify you're a human",
             "not a robot",
             "enter the characters you see",
             "access to this page has been denied",
-            "captcha",
+            "checking your browser before you access ebay",
+            "pardon our interruption",
+            "reference id:",
         ]
-        return any(marker in text for marker in block_markers)
+        if any(marker in body_text for marker in text_markers if marker):
+            return True
+
+        # Structural/metadata hints (best-effort, require at least one visible hint to be safer)
+        try:
+            if page.locator("form#destForm").count() > 0:
+                return True
+            if page.locator("script[src*=\"challenge-\"]").count() > 0 and (
+                "checking your browser" in body_text or "reference id" in body_text
+            ):
+                return True
+        except Exception:
+            pass
+        return False
 
     def _snapshot_debug(self, page: Any, label: str) -> None:
         if not self.debug_snapshot_dir:
@@ -236,6 +315,7 @@ class EbayBrowserScraper:
                     match = re.search(r"/itm/(\d+)", url)
                     if match:
                         listing_id = match.group(1)
+                cleaned_url = self._clean_ebay_url(url)
 
                 brand = None
                 model = None
@@ -264,7 +344,7 @@ class EbayBrowserScraper:
                     {
                         "title": title,
                         "price": price,
-                        "url": url,
+                        "url": cleaned_url if listing_id else url,
                         "listing_id": listing_id,
                         "condition": condition,
                         "seller_location": seller_location,
@@ -358,9 +438,22 @@ class EbayBrowserScraper:
             logger.warning("Results selector not found within timeout; attempting to parse whatever loaded")
             self._snapshot_debug(page, f"p{page_num}_no_results_selector")
 
+        # Save a snapshot of the results page for debugging/auditing
+        try:
+            if self.debug_snapshot_dir:
+                self._snapshot_debug(page, f"p{page_num}_results")
+        except Exception:
+            pass
+
         # Always try to parse first; if we get listings, accept them
         listings = self._parse_listing_elements(page)
         logger.info(f"Parsed {len(listings)} listings from page {page_num}")
+        # Remember results URL and load time for later referer-aware enrichment and delay
+        try:
+            self._last_results_url = page.url
+            self._last_results_loaded_at = time.monotonic()
+        except Exception:
+            pass
         if listings:
             return listings
 
@@ -387,6 +480,13 @@ class EbayBrowserScraper:
                 "headless": self.headless,
                 "args": browser_args,
             }
+            # Prefer Chromium's newer headless mode for closer fingerprint
+            if self.headless and self.browser_name == "chromium":
+                try:
+                    if "--headless=new" not in launch_kwargs["args"]:
+                        launch_kwargs["args"].append("--headless=new")
+                except Exception:
+                    pass
             if self.proxy_url:
                 launch_kwargs["proxy"] = {"server": self.proxy_url}
 
@@ -579,15 +679,100 @@ class EbayBrowserScraper:
         subset = listings[:enrich_limit]
         logger.info(f"Enriching {len(subset)} listings with snapshots → {snapshot_dir}")
 
+        # Enforce a minimum wait after results page before enrichment
+        try:
+            min_wait_s = float(os.environ.get("MAIN_PAGE_MIN_WAIT_S", "6"))
+        except Exception:
+            min_wait_s = 6.0
+        if min_wait_s > 0:
+            now = time.monotonic()
+            last_load = self._last_results_loaded_at or (now - 0.0)
+            remaining = max(0.0, min_wait_s - (now - last_load))
+            if remaining > 0:
+                logger.info(f"Waiting {remaining:.2f}s after results page before enrichment (min {min_wait_s:.2f}s)")
+                time.sleep(remaining)
+
+        nav_mode = (os.environ.get("ENRICH_NAV_MODE", "auto") or "auto").lower()
+        try:
+            jitter_min = float(os.environ.get("ENRICH_JITTER_MIN_S", "0.5"))
+            jitter_max = float(os.environ.get("ENRICH_JITTER_MAX_S", "2.0"))
+        except Exception:
+            jitter_min, jitter_max = 0.5, 2.0
         for idx, item in enumerate(subset, 1):
             url = item.get("url")
             if not url:
                 continue
             try:
                 logger.info(f"Enriching listing {idx}/{len(subset)}: {item.get('title', 'Unknown')[:50]}...")
-                logger.info(f"Step 1: Loading page: {url}")
-                page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+                logger.info(f"Step 1: Loading page: {url} (nav_mode={nav_mode})")
+                self._navigate_to_listing(page, item, nav_mode)
                 logger.info(f"Step 2: Page loaded successfully")
+                # Detect anti-bot challenge immediately and skip enrichment while saving evidence
+                if self._is_block_page(page):
+                    # Recheck-on-block with waits/reloads
+                    block_recheck = os.environ.get("BLOCK_RECHECK", "true").lower() in ("1", "true", "yes")
+                    try:
+                        block_max_retries = int(os.environ.get("BLOCK_MAX_RETRIES", "3"))
+                    except Exception:
+                        block_max_retries = 3
+                    try:
+                        block_wait_min = float(os.environ.get("BLOCK_WAIT_MIN_S", "5"))
+                        block_wait_max = float(os.environ.get("BLOCK_WAIT_MAX_S", "10"))
+                    except Exception:
+                        block_wait_min, block_wait_max = 5.0, 10.0
+                    block_reload = os.environ.get("BLOCK_RELOAD", "true").lower() in ("1", "true", "yes")
+
+                    def _snapshot_block(label_suffix: str = "BLOCKED") -> None:
+                        try:
+                            if snapshot_dir:
+                                base = f"{idx:02d}_" + self._sanitize_filename(item.get("title") or "listing") + f"_{label_suffix}"
+                                png_path = os.path.join(snapshot_dir, base + ".png")
+                                html_path = os.path.join(snapshot_dir, base + ".html")
+                                try:
+                                    page.screenshot(path=png_path, full_page=True, timeout=self.screenshot_timeout_ms)
+                                except Exception:
+                                    pass
+                                try:
+                                    page.set_default_timeout(self.content_timeout_ms)
+                                    with open(html_path, "w", encoding="utf-8") as f:
+                                        f.write(page.content())
+                                    page.set_default_timeout(self.timeout_ms)
+                                except Exception:
+                                    try:
+                                        page.set_default_timeout(self.timeout_ms)
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                    logger.warning("Anti-bot challenge detected (k8s scraper)")
+                    _snapshot_block("BLOCKED")
+                    blocked = True
+                    if block_recheck and block_max_retries > 0:
+                        for attempt in range(1, block_max_retries + 1):
+                            wait_s = block_wait_min + random.random() * max(0.0, (block_wait_max - block_wait_min))
+                            logger.info(f"Block retry {attempt}/{block_max_retries}: waiting {wait_s:.1f}s")
+                            time.sleep(wait_s)
+                            if block_reload:
+                                try:
+                                    page.reload(wait_until="domcontentloaded", timeout=self.timeout_ms)
+                                except Exception:
+                                    pass
+                            # brief dwell
+                            try:
+                                page.mouse.move(200 + random.randint(0, 200), 300 + random.randint(0, 200))
+                                time.sleep(0.5)
+                            except Exception:
+                                pass
+                            try:
+                                if not self._is_block_page(page):
+                                    logger.info("Block cleared after retry")
+                                    blocked = False
+                                    break
+                            except Exception:
+                                pass
+                    if blocked:
+                        continue
                 
                 # Human-like settle to avoid bot detection and prevent hangs in headless
                 if disable_settle_env or human_settle_max_s <= 0:
@@ -636,6 +821,7 @@ class EbayBrowserScraper:
                     ship_txt = ''
                     logger.info(f"Step 13: Body text failed: {e}")
                 
+                # Prefer numeric shipping amounts before free heuristics
                 shipping_cost = None
                 try:
                     logger.info(f"Step 14: Scanning for shipping cost in elements")
@@ -648,17 +834,18 @@ class EbayBrowserScraper:
                             # Add timeout for individual element text extraction
                             t = (el.inner_text(timeout=self.element_timeout_ms) or '').strip()
                             tl = t.lower()
-                            if ('shipping' in tl or 'postage' in tl) and ('handling' not in tl):
-                                if 'free' in tl:
-                                    shipping_cost = 0.0
-                                    break
-                                m = re.search(r"\$[\d,]+\.?\d*", t)
+                            if ('shipping' in tl or 'postage' in tl or 'delivery' in tl) and ('handling' not in tl):
+                                # Prefer numeric value first
+                                m = re.search(r"[$€£]\s?[\d,]+(?:\.[0-9]{1,2})?", t)
                                 if m:
                                     try:
-                                        shipping_cost = float(m.group().replace('$', '').replace(',', ''))
+                                        shipping_cost = float(m.group().replace('$','').replace('€','').replace('£','').replace(',',''))
                                         break
                                     except Exception:
                                         pass
+                                if 'free' in tl:
+                                    shipping_cost = 0.0
+                                    break
                         except Exception:
                             # Skip elements that timeout or fail
                             continue
@@ -769,7 +956,7 @@ class EbayBrowserScraper:
                                         for k, v in obj.items():
                                             if isinstance(v, (dict, list)):
                                                 _walk(v)
-                                            elif isinstance(v, str) and k in ("endDate", "availabilityEnds") and not detected_end:
+                                            elif isinstance(v, str) and k.lower() in ("enddate", "availabilityends", "pricevaliduntil", "end_time", "end") and not detected_end:
                                                 detected_end = v
                                     elif isinstance(obj, list):
                                         for it in obj:
@@ -786,12 +973,43 @@ class EbayBrowserScraper:
                     if not detected_end:
                         try:
                             cand = page.query_selector('div#vi-cdown')
+                            if not cand:
+                                cand = page.query_selector('[data-end-date], [data-endtime], [data-end_datetime]')
                             if cand:
-                                v = cand.get_attribute('data-end-date') or cand.get_attribute('data-endtime')
+                                v = cand.get_attribute('data-end-date') or cand.get_attribute('data-endtime') or cand.get_attribute('data-end_datetime')
+                                if not v:
+                                    for el in cand.query_selector_all('*')[:20]:
+                                        v = el.get_attribute('data-end-date') or el.get_attribute('data-endtime') or el.get_attribute('data-end_datetime')
+                                        if v:
+                                            break
                                 if v:
                                     detected_end = v
                         except Exception:
                             pass
+
+                    # Try time[datetime]
+                    if not detected_end:
+                        try:
+                            tnode = page.query_selector('time[datetime]')
+                            if tnode:
+                                v = tnode.get_attribute('datetime')
+                                if v:
+                                    detected_end = v
+                        except Exception:
+                            pass
+
+                    # Regex ISO in HTML as last resort
+                    if not detected_end:
+                        try:
+                            page.set_default_timeout(self.content_timeout_ms)
+                            html = page.content()
+                            page.set_default_timeout(self.timeout_ms)
+                        except Exception:
+                            html = ''
+                        if html:
+                            m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+\-]\d{2}:\d{2})?)", html)
+                            if m:
+                                detected_end = m.group(1)
 
                     # Parse and store if seemingly ISO-like
                     if detected_end:
@@ -815,6 +1033,19 @@ class EbayBrowserScraper:
                     logger.warning(f"Continuing to next listing after timeout...")
                 else:
                     logger.warning(f"Enrichment failed for listing {idx}/{len(subset)} ({url}): {e}")
+            finally:
+                # Attempt to return to results context for the next listing to preserve referer
+                try:
+                    if self._last_results_url:
+                        page.goto(self._last_results_url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+                        # Random jitter between enrichments
+                        try:
+                            jitter = max(0.0, jitter_min) + random.random() * max(0.0, (jitter_max - jitter_min))
+                        except Exception:
+                            jitter = 0.8
+                        time.sleep(jitter)
+                except Exception:
+                    pass
         # DB upsert if available
         if upsert_listings:
             try:

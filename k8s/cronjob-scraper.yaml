@@ -77,6 +77,16 @@ spec:
                   value: "/tmp/snapshots"
                 - name: USER_DATA_DIR
                   value: "/tmp/profile-ebay"
+                - name: SLOW_MO_MS
+                  value: "50"
+                - name: MAIN_PAGE_MIN_WAIT_S
+                  value: "4"
+                - name: ENRICH_LIMIT
+                  value: "5"
+                - name: ENRICH_JITTER_MIN_S
+                  value: "0.5"
+                - name: ENRICH_JITTER_MAX_S
+                  value: "2.0"
               resources:
                 requests:
                   cpu: "250m"
