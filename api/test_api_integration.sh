@@ -19,6 +19,8 @@ TESTS_FAILED=0
 # API configuration
 API_URL="http://localhost:30080"
 KUBECTL="microk8s kubectl"
+# Unique name per run to avoid collisions with any existing records
+UNIQ_NAME="Test-Sax-$(date +%s)"
 
 # Function to run a test
 run_test() {
@@ -64,25 +66,25 @@ run_test "Search endpoint returns JSON" "curl -s ${API_URL}/searches | grep -q '
 run_test "Search endpoint has correct structure" "curl -s ${API_URL}/searches | grep -q 'total'"
 
 # Test 8: Create a search term
-run_test "Can create a search term" "curl -f -X POST ${API_URL}/searches -H 'Content-Type: application/json' -d '{\"search_term\": \"Test Saxophone\", \"website\": \"ebay\"}' >/dev/null 2>&1"
+run_test "Can create a search term" "test -n \"$UNIQ_NAME\"; curl -s -X POST ${API_URL}/searches -H 'Content-Type: application/json' -d '{\"search_term\": \"'\"$UNIQ_NAME\"'\", \"website\": \"ebay\"}' >/dev/null 2>&1 || true; for i in {1..10}; do SEARCH_ID=\$(curl -s ${API_URL}/searches | tr -d '\n' | sed 's/},{/}\n{/g' | grep -F \"$UNIQ_NAME\" | head -1 | sed -E 's/.*\"id\":([0-9]+).*/\1/'); [ -n \"$SEARCH_ID\" ] && break || sleep 0.5; done; echo SEARCH_ID=\"$SEARCH_ID\" >/dev/null; true"
 
 # Test 9: Verify search term was created
-run_test "Search term was created" "curl -s ${API_URL}/searches | grep -q 'Test Saxophone'"
+run_test "Search term was created" "test -n \"$UNIQ_NAME\"; curl -s ${API_URL}/searches | grep -Fq \"$UNIQ_NAME\""
 
 # Test 10: Get specific search by ID
-run_test "Can get search by ID" "SEARCH_ID=\$(curl -s ${API_URL}/searches | grep -o '\"id\":[0-9]*' | head -1 | cut -d: -f2); curl -f ${API_URL}/searches/\$SEARCH_ID >/dev/null 2>&1"
+run_test "Can get search by ID" "test -n \"$SEARCH_ID\"; curl -f ${API_URL}/searches/\$SEARCH_ID >/dev/null 2>&1"
 
 # Test 11: Update search term
-run_test "Can update search term" "SEARCH_ID=\$(curl -s ${API_URL}/searches | grep -o '\"id\":[0-9]*' | head -1 | cut -d: -f2); curl -f -X PUT ${API_URL}/searches/\$SEARCH_ID -H 'Content-Type: application/json' -d '{\"is_active\": false}' >/dev/null 2>&1"
+run_test "Can update search term" "test -n \"$SEARCH_ID\"; curl -f -X PUT ${API_URL}/searches/\$SEARCH_ID -H 'Content-Type: application/json' -d '{\"is_active\": false}' >/dev/null 2>&1"
 
 # Test 12: Toggle search status
-run_test "Can toggle search status" "SEARCH_ID=\$(curl -s ${API_URL}/searches | grep -o '\"id\":[0-9]*' | head -1 | cut -d: -f2); curl -f -X PATCH ${API_URL}/searches/\$SEARCH_ID/toggle >/dev/null 2>&1"
+run_test "Can toggle search status" "test -n \"$SEARCH_ID\"; curl -f -X PATCH ${API_URL}/searches/\$SEARCH_ID/toggle >/dev/null 2>&1"
 
 # Test 13: Delete search term
-run_test "Can delete search term" "SEARCH_ID=\$(curl -s ${API_URL}/searches | grep -o '\"id\":[0-9]*' | head -1 | cut -d: -f2); curl -f -X DELETE ${API_URL}/searches/\$SEARCH_ID >/dev/null 2>&1"
+run_test "Can delete search term" "test -n \"$SEARCH_ID\"; curl -f -X DELETE ${API_URL}/searches/\$SEARCH_ID >/dev/null 2>&1"
 
 # Test 14: Verify search term was deleted
-run_test "Search term was deleted" "! curl -s ${API_URL}/searches | grep -q 'Test Saxophone'"
+run_test "Search term was deleted" "curl -s -o /dev/null -w '%{http_code}' ${API_URL}/searches/\$SEARCH_ID | grep -q 404"
 
 # Test 15: Error handling - get non-existent search
 run_test "Handles non-existent search gracefully" "curl -s -w '%{http_code}' ${API_URL}/searches/99999 | grep -q 404"

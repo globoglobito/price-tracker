@@ -528,10 +528,23 @@ class EbayBrowserScraper:
                     time.sleep(0.8 + random.random() * 0.5)
                 except Exception:
                     pass
-                for page_num in range(1, self.max_pages + 1):
-                    page_results = self.scrape_page(page_num, page)
-                    results.extend(page_results)
-                    if page_num < self.max_pages:
+                if self.max_pages and self.max_pages > 0:
+                    for page_num in range(1, self.max_pages + 1):
+                        page_results = self.scrape_page(page_num, page)
+                        results.extend(page_results)
+                        if page_num < self.max_pages:
+                            delay = self.delay_seconds + (0.5)
+                            logger.info(f"Sleeping {delay:.1f}s before next page...")
+                            time.sleep(delay)
+                else:
+                    # Unlimited paging: continue until a page returns zero listings
+                    page_num = 1
+                    while True:
+                        page_results = self.scrape_page(page_num, page)
+                        if not page_results:
+                            break
+                        results.extend(page_results)
+                        page_num += 1
                         delay = self.delay_seconds + (0.5)
                         logger.info(f"Sleeping {delay:.1f}s before next page...")
                         time.sleep(delay)
@@ -672,11 +685,11 @@ class EbayBrowserScraper:
             return
 
         listings[:] = filtered
-        if not snapshot_dir or enrich_limit <= 0:
+        if not snapshot_dir:
             return
 
         pathlib.Path(snapshot_dir).mkdir(parents=True, exist_ok=True)
-        subset = listings[:enrich_limit]
+        subset = listings if enrich_limit <= 0 else listings[:enrich_limit]
         logger.info(f"Enriching {len(subset)} listings with snapshots → {snapshot_dir}")
 
         # Enforce a minimum wait after results page before enrichment
@@ -809,50 +822,8 @@ class EbayBrowserScraper:
                 logger.info(f"Step 10: Snapshots complete - {png_path}")
                 # Lightweight enrichment on detail page
                 logger.info(f"Step 11: Starting data extraction")
-                # Shipping cost
-                logger.info(f"Step 12: Getting page body text")
-                try:
-                    page.set_default_timeout(self.content_timeout_ms)
-                    ship_txt = page.inner_text('body') if page.is_visible('body') else ''
-                    page.set_default_timeout(self.timeout_ms)  # Reset to default
-                    logger.info(f"Step 13: Body text retrieved, length: {len(ship_txt)}")
-                except Exception as e:
-                    page.set_default_timeout(self.timeout_ms)  # Reset on error
-                    ship_txt = ''
-                    logger.info(f"Step 13: Body text failed: {e}")
-                
-                # Prefer numeric shipping amounts before free heuristics
-                shipping_cost = None
-                try:
-                    logger.info(f"Step 14: Scanning for shipping cost in elements")
-                    page.set_default_timeout(self.content_timeout_ms)
-                    elements = page.query_selector_all('span, div')[:1500]
-                    page.set_default_timeout(self.timeout_ms)  # Reset to default
-                    logger.info(f"Step 15: Found {len(elements)} elements to scan")
-                    for el in elements:
-                        try:
-                            # Add timeout for individual element text extraction
-                            t = (el.inner_text(timeout=self.element_timeout_ms) or '').strip()
-                            tl = t.lower()
-                            if ('shipping' in tl or 'postage' in tl or 'delivery' in tl) and ('handling' not in tl):
-                                # Prefer numeric value first
-                                m = re.search(r"[$€£]\s?[\d,]+(?:\.[0-9]{1,2})?", t)
-                                if m:
-                                    try:
-                                        shipping_cost = float(m.group().replace('$','').replace('€','').replace('£','').replace(',',''))
-                                        break
-                                    except Exception:
-                                        pass
-                                if 'free' in tl:
-                                    shipping_cost = 0.0
-                                    break
-                        except Exception:
-                            # Skip elements that timeout or fail
-                            continue
-                except Exception as e:
-                    page.set_default_timeout(self.timeout_ms)  # Reset on error
-                    logger.info(f"Step 16: Shipping cost extraction failed: {e}")
-                logger.info(f"Step 17: Shipping cost extraction complete: {shipping_cost}")
+                # Shipping extraction now relies on shipping_info captured from results cards
+                # and schema no longer stores numeric shipping_cost. Skipping detail-page cost parsing.
                 # Location and region
                 location_text = None
                 region = None
@@ -898,9 +869,7 @@ class EbayBrowserScraper:
                             region = 'Other'
                 except Exception:
                     pass
-                # Attach to item for DB
-                if shipping_cost is not None:
-                    item['shipping_cost'] = shipping_cost
+                # Attach to item for DB (no shipping_cost field in schema)
                 if location_text:
                     item['seller_location'] = location_text
                     item['location_text'] = location_text

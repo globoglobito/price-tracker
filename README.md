@@ -1,31 +1,18 @@
 # Price Tracker
 
-A comprehensive price tracking application built with modern DevOps practices, designed specifically for WSL2 + MicroK8s environments.
+An end-to-end price tracking app for musical instruments (e.g., saxophones), built to teach hands-on Kubernetes on WSL2, scraping with Playwright, and a lean Postgres-backed API. This README is a step-by-step guide so anyone can get it running.
 
-## 🏗️ Architecture
+## Who this is for
+- You’re on WSL2 and want a realistic microservice + Kubernetes project.
+- You want a scraper that avoids bot detection with human-like behavior.
+- You prefer a single repo you can run locally with MicroK8s.
 
-### Image Strategy
-- **Database**: `postgres:15-alpine` (official PostgreSQL image)
-- **API**: `globoglobitos/price-tracker-api:latest` (custom FastAPI application)
-- **Future Scrapers**: `globoglobitos/price-tracker-scraper:latest` (custom scraper pods)
+## What you’ll deploy
+- PostgreSQL (schema + migrations) in MicroK8s
+- FastAPI (read-only) Search API on NodePort 30080
+- A suspended CronJob for the eBay scraper (run on demand)
 
-### Components
-- **Frontend**: TBD (React/Vue.js planned)  
-- **Backend**: FastAPI Search API (PostgreSQL connectivity)
-- **Database**: PostgreSQL with comprehensive schema supporting any website
-- **Container Registry**: Docker Hub
-- **Orchestration**: Kubernetes (MicroK8s)
-- **CI/CD**: GitHub Actions
-- **Environment**: WSL2 + Ubuntu
-- **Python**: 3.12+ with virtual environment
-
-### Database Schema
-- **Comprehensive Design**: Single table handles all websites (eBay, Reverb, ShopGoodwill, etc.)
-- **Maximum Flexibility**: No restrictive constraints - supports any website, condition, or currency
-- **Rich Data Support**: Condition, shipping, auctions, location, currency, and more
-- **Future-Proof**: Ready for any new website without schema changes
-
-## 🚀 Quick Start (Fresh WSL2 Environment)
+## 🚀 Quick Start (Fresh WSL2 + MicroK8s)
 
 ### 1. Prerequisites Setup
 ```bash
@@ -67,7 +54,7 @@ The script will prompt you for:
 
 📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
-### 3. Setup Python Environment
+### 3. Setup Python Environment (optional for local testing)
 ```bash
 # Clone repository
 git clone https://github.com/globoglobito/price-tracker.git
@@ -83,7 +70,7 @@ pip install -r requirements.txt
 chmod +x scripts/*.sh tests/*.sh
 ```
 
-### 4. Deploy Complete System
+### 4. Deploy Complete System (Database + API + Scraper CronJob)
 ```bash
 # Deploy everything (database + API + suspended scraper CronJob) with comprehensive testing
 ./scripts/deploy-complete.sh
@@ -104,7 +91,7 @@ kubectl get all -n price-tracker
 
 ## 🧪 Testing & Local Development
 
-### Local Development
+### Local Development (cluster-first)
 ```bash
 # All components run in Kubernetes (MicroK8s)
 # No local development needed - everything is containerized
@@ -117,12 +104,18 @@ kubectl logs -f deployment/postgres -n price-tracker
 curl http://localhost:30080/health
 ```
 
-### Integration Testing
-We provide essential integration tests to validate your deployment:
+### Testing
+We provide offline unit tests for the scraper core logic and integration tests for deployed components.
 
 ```bash
-# Run essential tests to verify deployment
+# 1) Scraper offline unit tests (no network)
+./tests/scraper_unit.sh
+
+# 2) Integration tests to verify deployment
 ./database/test_integration.sh && ./api/test_api_integration.sh
+
+# Or run everything with one command
+chmod +x tests/run_all.sh && ./tests/run_all.sh
 ```
 ## 🕒 Scraper CronJob
 
@@ -162,7 +155,10 @@ microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspe
   - Stores cookies and browsing history that make the scraper appear as a returning user
   - Significantly reduces bot detection triggers
   - Improves scraping success rate and listing discovery
-- **Database saving requirement**: Set `ENRICH_LIMIT > 0` and `SNAPSHOT_DIR` to enable the database persistence code path
+- **Unlimited pages & enrichment**: `MAX_PAGES=0` scrapes all pages; `ENRICH_LIMIT=0` enriches all filtered listings
+- **Human‑like navigation**: Click‑through from results (default), with goto fallback and URL verification
+- **Challenge handling**: Wait/retry with reload (envs: `BLOCK_RECHECK`, `BLOCK_MAX_RETRIES`, `BLOCK_WAIT_MIN_S/MAX_S`)
+- **Headless fingerprint**: Chromium `--headless=new` for a closer Chrome signature
 - **Without proper profile**: Scraper may return 0 listings due to bot detection, even though the search logic is correct
 
 ### Incremental scraping behavior
@@ -340,6 +336,21 @@ This project is licensed under the MIT License.
 ## 🙋‍♂️ Support
 
 For issues and questions:
-1. Check the troubleshooting section above
-2. Run integration tests to identify issues
-3. Open a GitHub issue with test results
+1. Check troubleshooting above
+2. Run the integration tests
+3. Open an issue with logs and steps
+
+## Appendix: Local-only JSONL runs (optional)
+For experimentation without the cluster, there’s a JSONL-based local mode under `local-stuff-ignore/`.
+
+What it does:
+- Collect phase: scrape search results to JSONL and enqueue for enrichment
+- Enrich phase: open listings with Playwright and write `enrichment_latest.jsonl` and `enrichment_history.jsonl`
+
+Run enrich from queue (example):
+```bash
+source venv/bin/activate
+export SEARCH_TERM='Selmer Mark VI' HEADLESS=true ENRICH_LIMIT=0 ENRICH_NAV_MODE=click WARMUP_HOME=true ENRICH_ISOLATION=browser FRESH_PROFILE_PER_LISTING=true WAIT_ON_PAGE_S=8 SLOW_MO_MS=0 LISTING_MAX_S=45 BLOCK_RECHECK=true BLOCK_MAX_RETRIES=3 BLOCK_WAIT_MIN_S=8 BLOCK_WAIT_MAX_S=12 BLOCK_RELOAD=true SNAPSHOT_DIR="$PWD/local-stuff-ignore/snapshots" PYTHONPATH=.
+python local-stuff-ignore/enrich_from_queue.py
+```
+Snapshots and HTML are saved to `local-stuff-ignore/snapshots`. Use this to iterate anti-bot behavior before pushing to the CronJob.

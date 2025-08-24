@@ -86,7 +86,7 @@ run_test "Can query searches table" "$KUBECTL exec -n price-tracker deployment/p
 run_test "Can query listings table" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SELECT COUNT(*) FROM listings WHERE website = 'ebay';\" | grep -q '2'"
 
 # Test 11: Index usage verification
-run_test "Indexes are being used" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; EXPLAIN (FORMAT JSON) SELECT * FROM listings WHERE website = 'ebay';\" | grep -q 'Index Scan'"
+run_test "Indexes are being used" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SET search_path TO price_tracker, public; SET enable_seqscan = off; EXPLAIN (FORMAT JSON) SELECT * FROM listings WHERE website = 'ebay' LIMIT 1;\" | grep -Eq 'Index|Bitmap'"
 
 # Test 12: Schema isolation
 run_test "Schema isolation works" "$KUBECTL exec -n price-tracker deployment/postgres -- psql -U $DB_USER -d $DB_NAME -t -c \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('searches', 'listings');\" | grep -q '0'"

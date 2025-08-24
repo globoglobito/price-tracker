@@ -50,7 +50,7 @@ spec:
                 - name: SEARCH_TERM
                   value: "Selmer Mark VI"
                 - name: MAX_PAGES
-                  value: "2"
+                  value: "0" # 0 or <=0 means unlimited pages
                 - name: HEADLESS
                   value: "true"
                 - name: BROWSER
@@ -80,13 +80,27 @@ spec:
                 - name: SLOW_MO_MS
                   value: "50"
                 - name: MAIN_PAGE_MIN_WAIT_S
-                  value: "4"
+                  value: "6"
                 - name: ENRICH_LIMIT
-                  value: "5"
+                  value: "0" # 0 or <=0 means enrich all
+                - name: ENRICH_NAV_MODE
+                  value: "click"
                 - name: ENRICH_JITTER_MIN_S
-                  value: "0.5"
+                  value: "8"
                 - name: ENRICH_JITTER_MAX_S
-                  value: "2.0"
+                  value: "12"
+                - name: WAIT_ON_PAGE_S
+                  value: "8"
+                - name: BLOCK_RECHECK
+                  value: "true"
+                - name: BLOCK_MAX_RETRIES
+                  value: "3"
+                - name: BLOCK_WAIT_MIN_S
+                  value: "8"
+                - name: BLOCK_WAIT_MAX_S
+                  value: "12"
+                - name: LISTING_MAX_S
+                  value: "45"
               resources:
                 requests:
                   cpu: "250m"

@@ -110,7 +110,6 @@ def upsert_listings(listings: List[Dict[str, Any]], search_id: int | None = None
                 l.get("price"),
                 l.get("currency", "USD"),
                 l.get("original_price"),
-                l.get("shipping_cost"),
                 l.get("brand"),
                 l.get("model"),
                 l.get("type"),
@@ -119,8 +118,6 @@ def upsert_listings(listings: List[Dict[str, Any]], search_id: int | None = None
                 l.get("shipping_info"),
                 bool(l.get("has_best_offer")) if l.get("has_best_offer") is not None else None,
                 l.get("auction_end_time"),
-                None,  # sold_quantity
-                None,  # date_listed
             )
         )
 
@@ -128,18 +125,16 @@ def upsert_listings(listings: List[Dict[str, Any]], search_id: int | None = None
     INSERT INTO price_tracker.listings (
         search_id,
         title, url, website, listing_id,
-        price, currency, original_price, shipping_cost,
+        price, currency, original_price,
         brand, model, type, condition,
         seller_location, shipping_info, has_best_offer, auction_end_time,
-        sold_quantity, date_listed,
         first_seen_at, last_seen_at, is_active
     ) VALUES (
         %s,
         %s, %s, %s, %s,
+        %s, %s, %s,
         %s, %s, %s, %s,
         %s, %s, %s, %s,
-        %s, %s, %s, %s,
-        %s, %s,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE
     )
     ON CONFLICT (website, listing_id) DO UPDATE SET
@@ -149,7 +144,6 @@ def upsert_listings(listings: List[Dict[str, Any]], search_id: int | None = None
         price = EXCLUDED.price,
         currency = EXCLUDED.currency,
         original_price = EXCLUDED.original_price,
-        shipping_cost = EXCLUDED.shipping_cost,
         brand = EXCLUDED.brand,
         model = EXCLUDED.model,
         type = EXCLUDED.type,

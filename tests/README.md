@@ -45,8 +45,15 @@ Tests the FastAPI Search API functionality:
 Run both test suites to verify your complete deployment:
 
 ```bash
-# Run all tests
+# Run scraper offline unit tests (no network)
+./tests/scraper_unit.sh
+
+# Run integration tests
 ./database/test_integration.sh && ./api/test_api_integration.sh
+
+# Or run everything with a single command
+chmod +x tests/run_all.sh
+./tests/run_all.sh
 ```
 
 ## Expected Output

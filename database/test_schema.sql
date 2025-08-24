@@ -13,16 +13,15 @@ ON CONFLICT (search_term, website) DO NOTHING;
 
 -- Rich data listing (like eBay)
 INSERT INTO price_tracker.listings (
-    listing_name, 
-    price, 
-    url, 
-    website, 
+    title,
+    price,
+    url,
+    website,
     scraped_at,
     brand,
     model,
     type,
-    date_listed,
-    location
+    seller_location
 ) VALUES (
     'YAMAHA YTS-61S Tenor Saxophone',
     2400.00,
@@ -32,16 +31,15 @@ INSERT INTO price_tracker.listings (
     'Yamaha',
     'YTS-61S',
     'Tenor',
-    CURRENT_DATE - INTERVAL '5 days',
     'Fukuoka Ken, Japan'
 );
 
 -- Minimal data listing (like a simple shop)
 INSERT INTO price_tracker.listings (
-    listing_name, 
-    price, 
-    url, 
-    website, 
+    title,
+    price,
+    url,
+    website,
     scraped_at
 ) VALUES (
     'Saxophone for Sale',
@@ -53,14 +51,14 @@ INSERT INTO price_tracker.listings (
 
 -- Medium data listing
 INSERT INTO price_tracker.listings (
-    listing_name, 
-    price, 
-    url, 
-    website, 
+    title,
+    price,
+    url,
+    website,
     scraped_at,
     brand,
     type,
-    location
+    seller_location
 ) VALUES (
     'Vintage Conn Tenor Saxophone',
     1199.00,
@@ -78,13 +76,13 @@ SELECT * FROM price_tracker.searches;
 
 SELECT '=== LISTINGS TABLE ===' as info;
 SELECT 
-    listing_name,
+    title,
     price,
     website,
     brand,
     model,
     type,
-    location,
+    seller_location,
     scraped_at
 FROM price_tracker.listings 
 ORDER BY scraped_at DESC;

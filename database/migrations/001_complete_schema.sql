@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS price_tracker.listings (
     price DECIMAL(10,2) NOT NULL,
     currency VARCHAR(3) DEFAULT 'USD',
     original_price DECIMAL(10,2), -- Original/retail price if available
-    shipping_cost DECIMAL(10,2),
+    -- shipping_cost dropped (prefer shipping_info text; amounts parsed when needed)
     
     -- Item details
     brand VARCHAR(100),
@@ -49,12 +49,10 @@ CREATE TABLE IF NOT EXISTS price_tracker.listings (
     -- Auction/sale specific fields
     has_best_offer BOOLEAN DEFAULT FALSE,
     auction_end_time TIMESTAMP,
-    watchers_count INTEGER,
-    sold_quantity INTEGER,
-    available_quantity INTEGER,
+    -- watchers_count/sold_quantity/available_quantity dropped for simplicity
     
     -- Timestamps
-    date_listed TIMESTAMP,
+    -- date_listed dropped
     scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Metadata
@@ -100,7 +98,7 @@ COMMENT ON COLUMN price_tracker.listings.listing_id IS 'External listing ID from
 COMMENT ON COLUMN price_tracker.listings.price IS 'Current listing price';
 COMMENT ON COLUMN price_tracker.listings.currency IS 'Price currency (USD, EUR, PEN, etc.)';
 COMMENT ON COLUMN price_tracker.listings.original_price IS 'Original/retail price if available';
-COMMENT ON COLUMN price_tracker.listings.shipping_cost IS 'Shipping cost if available';
+-- shipping_cost comment removed
 COMMENT ON COLUMN price_tracker.listings.brand IS 'Item brand (e.g., Selmer, Yamaha)';
 COMMENT ON COLUMN price_tracker.listings.model IS 'Item model (e.g., Mark VI, YAS-62)';
 COMMENT ON COLUMN price_tracker.listings.type IS 'Item type (e.g., Alto Sax, Tenor Sax)';
@@ -109,10 +107,7 @@ COMMENT ON COLUMN price_tracker.listings.seller_location IS 'Seller location (co
 COMMENT ON COLUMN price_tracker.listings.shipping_info IS 'Shipping details and options';
 COMMENT ON COLUMN price_tracker.listings.has_best_offer IS 'Whether the listing accepts best offers';
 COMMENT ON COLUMN price_tracker.listings.auction_end_time IS 'Auction end time for auction listings';
-COMMENT ON COLUMN price_tracker.listings.watchers_count IS 'Number of people watching the listing';
-COMMENT ON COLUMN price_tracker.listings.sold_quantity IS 'Quantity sold (for multi-quantity listings)';
-COMMENT ON COLUMN price_tracker.listings.available_quantity IS 'Available quantity (for multi-quantity listings)';
-COMMENT ON COLUMN price_tracker.listings.date_listed IS 'When the item was originally listed';
+-- removed comments for dropped columns
 COMMENT ON COLUMN price_tracker.listings.scraped_at IS 'When this data was scraped';
 COMMENT ON COLUMN price_tracker.listings.notes IS 'Additional notes or metadata';
 
