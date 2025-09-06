@@ -267,11 +267,13 @@ class EbayBrowserScraper:
             pass
 
     def _parse_listing_elements(self, page: Any) -> List[Dict]:
-        items = page.query_selector_all(".s-item")
+        # Try both old (.s-item) and new (.s-card) eBay formats
+        items = page.query_selector_all(".s-item, .s-card")
         listings: List[Dict] = []
         for item in items:
             try:
-                title_elem = item.query_selector(".s-item__title")
+                # Try new format first, then fall back to old format
+                title_elem = item.query_selector(".s-card__title .su-styled-text") or item.query_selector(".s-item__title")
                 if not title_elem:
                     continue
 
@@ -279,21 +281,25 @@ class EbayBrowserScraper:
                 if title == "Shop on eBay":
                     continue
 
-                link_elem = item.query_selector(".s-item__link")
+                # Try new format link, then old format
+                link_elem = item.query_selector("a[href*='/itm/']") or item.query_selector(".s-item__link")
                 url = link_elem.get_attribute("href") if link_elem else None
 
-                price_elem = item.query_selector(".s-item__price")
+                # Try new format price, then old format
+                price_elem = item.query_selector(".s-card__price .su-styled-text") or item.query_selector(".s-item__price")
                 price_text = price_elem.inner_text().strip() if price_elem else ""
                 price = _extract_price_from_text(price_text)
                 if price is None:
                     continue
 
-                condition_elem = item.query_selector(".s-item__condition, .s-item__subtitle, .s-item__details")
+                # Try new format condition, then old format
+                condition_elem = (item.query_selector(".s-card__subtitle .su-styled-text") or 
+                                item.query_selector(".s-item__condition, .s-item__subtitle, .s-item__details"))
                 condition_text = (condition_elem.inner_text() if condition_elem else "").lower()
                 condition: Optional[str] = None
-                if "used" in condition_text:
+                if "used" in condition_text or "pre-owned" in condition_text:
                     condition = "Used"
-                elif "new" in condition_text:
+                elif "new" in condition_text or "brand new" in condition_text:
                     condition = "New"
                 elif "open box" in condition_text:
                     condition = "Open box"
@@ -304,10 +310,17 @@ class EbayBrowserScraper:
                 else:
                     condition = "Not Specified"
 
-                location_elem = item.query_selector(".s-item__location")
+                # Try new format location, then old format  
+                location_elem = (item.query_selector(".s-card__attribute-row:has-text('Located in') .su-styled-text") or
+                               item.query_selector(".s-item__location"))
                 seller_location = (location_elem.inner_text().strip() if location_elem else None)
+                # Clean up "Located in " prefix from new format
+                if seller_location and seller_location.startswith("Located in "):
+                    seller_location = seller_location[11:]
 
-                shipping_elem = item.query_selector(".s-item__shipping")
+                # Try new format shipping, then old format
+                shipping_elem = (item.query_selector(".s-card__attribute-row:has-text('delivery') .su-styled-text, .s-card__attribute-row:has-text('Shipping') .su-styled-text") or
+                               item.query_selector(".s-item__shipping"))
                 shipping_info = (shipping_elem.inner_text().strip() if shipping_elem else None)
 
                 listing_id = None
