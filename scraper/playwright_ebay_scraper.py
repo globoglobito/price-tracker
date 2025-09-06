@@ -273,7 +273,9 @@ class EbayBrowserScraper:
         for item in items:
             try:
                 # Try new format first, then fall back to old format
-                title_elem = item.query_selector(".s-card__title .su-styled-text") or item.query_selector(".s-item__title")
+                title_elem = (item.query_selector(".s-card__title .su-styled-text") or 
+                            item.query_selector(".s-card__title a .su-styled-text") or 
+                            item.query_selector(".s-item__title"))
                 if not title_elem:
                     continue
 
@@ -286,7 +288,9 @@ class EbayBrowserScraper:
                 url = link_elem.get_attribute("href") if link_elem else None
 
                 # Try new format price, then old format
-                price_elem = item.query_selector(".s-card__price .su-styled-text") or item.query_selector(".s-item__price")
+                price_elem = (item.query_selector(".s-card__price .su-styled-text") or 
+                            item.query_selector(".s-card__attribute-row .su-styled-text.s-card__price") or
+                            item.query_selector(".s-item__price"))
                 price_text = price_elem.inner_text().strip() if price_elem else ""
                 price = _extract_price_from_text(price_text)
                 if price is None:
