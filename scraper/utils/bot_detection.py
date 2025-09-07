@@ -18,7 +18,8 @@ def is_block_page(page: Any) -> bool:
     """
     body_text = ""
     try:
-        # Only visible text content
+        # Only visible text content with timeout
+        page.set_default_timeout(5000)  # 5 second timeout for DOM operations
         if page.is_visible('body'):
             body_text = (page.inner_text('body') or "").lower()
     except Exception:
@@ -70,13 +71,15 @@ def save_debug_snapshot(page: Any, debug_snapshot_dir: str, label: str) -> None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.join(debug_snapshot_dir, f"{timestamp}_{label}")
         
-        # Screenshot
+        # Screenshot with timeout
         try:
+            page.set_default_timeout(10000)  # 10 second timeout
             page.screenshot(path=f"{base}.png", full_page=True)
         except Exception:
             pass
-        # HTML
+        # HTML with timeout
         try:
+            page.set_default_timeout(5000)  # 5 second timeout
             with open(f"{base}.html", "w", encoding="utf-8") as f:
                 f.write(page.content())
         except Exception:

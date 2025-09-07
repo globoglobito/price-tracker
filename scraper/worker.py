@@ -88,20 +88,46 @@ class EbayWorker:
             from playwright.sync_api import sync_playwright
             
             with sync_playwright() as playwright:
-                # Launch browser
-                browser_type = getattr(playwright, settings.get_browser_type())
-                
+                # Use same sophisticated browser setup as monolithic scraper
+                browser_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                ]
+
                 launch_kwargs = {
                     "headless": settings.is_headless(),
-                    "slow_mo": settings.get_slow_mo_ms()
+                    "args": browser_args,
                 }
                 
-                browser = browser_type.launch(**launch_kwargs)
+                # Prefer Chromium's newer headless mode for closer fingerprint
+                if settings.is_headless() and settings.get_browser_type() == "chromium":
+                    try:
+                        if "--headless=new" not in launch_kwargs["args"]:
+                            launch_kwargs["args"].append("--headless=new")
+                    except Exception:
+                        pass
+
+                browser_type = getattr(playwright, settings.get_browser_type())
+                context = None
+                browser = None
                 
                 try:
-                    # Create context and page
-                    context = browser.new_context()
-                    page = context.new_page()
+                    # Persistent context if user data dir provided (like monolithic)
+                    user_data_dir = settings.get_user_data_dir()
+                    if user_data_dir and settings.get_browser_type() in ("chromium", "firefox"):
+                        persist_kwargs = dict(launch_kwargs)
+                        if settings.get_slow_mo_ms():
+                            persist_kwargs["slow_mo"] = settings.get_slow_mo_ms()
+                        context = browser_type.launch_persistent_context(user_data_dir, **persist_kwargs)
+                        page = context.new_page()
+                    else:
+                        # Regular browser launch with sophisticated setup
+                        if settings.get_slow_mo_ms():
+                            launch_kwargs["slow_mo"] = settings.get_slow_mo_ms()
+                        browser = browser_type.launch(**launch_kwargs)
+                        context = browser.new_context()
+                        page = context.new_page()
                     
                     # Use the proper enrichment method like the monolithic scraper
                     # enrich_and_snapshot handles navigation, retries, and timeouts properly
@@ -138,14 +164,16 @@ class EbayWorker:
                     self.failed_count += 1
                     
                 finally:
-                    # Cleanup browser resources
+                    # Cleanup browser resources (same as monolithic)
                     try:
-                        context.close()
+                        if context:
+                            context.close()
                     except Exception:
                         pass
                     
                     try:
-                        browser.close()
+                        if browser:
+                            browser.close()
                     except Exception:
                         pass
                         
