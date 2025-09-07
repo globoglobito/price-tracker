@@ -124,7 +124,12 @@ class EbayWorker:
                         self.user_data_dir = user_data_dir  # Track for cleanup
                         
                         # Pre-create the directory with proper permissions before Chromium uses it
-                        os.makedirs(user_data_dir, mode=0o777, exist_ok=True)
+                        try:
+                            os.makedirs(user_data_dir, mode=0o777, exist_ok=True)
+                            logger.info(f"Created profile directory: {user_data_dir}")
+                        except Exception as e:
+                            logger.error(f"Failed to create profile directory {user_data_dir}: {e}")
+                            raise
                         
                         persist_kwargs = dict(launch_kwargs)
                         if settings.get_slow_mo_ms():
