@@ -114,8 +114,15 @@ class EbayWorker:
                 
                 try:
                     # Persistent context if user data dir provided (like monolithic)
-                    user_data_dir = settings.get_user_data_dir()
-                    if user_data_dir and settings.get_browser_type() in ("chromium", "firefox"):
+                    # Use one of 4 reusable profile directories to avoid conflicts while maintaining persistence
+                    base_user_data_dir = settings.get_user_data_dir()
+                    if base_user_data_dir and settings.get_browser_type() in ("chromium", "firefox"):
+                        import os
+                        import hashlib
+                        # Use hash of hostname to deterministically assign one of 4 profiles
+                        hostname = os.environ.get('HOSTNAME', 'worker')
+                        profile_number = int(hashlib.md5(hostname.encode()).hexdigest(), 16) % 4 + 1
+                        user_data_dir = f"{base_user_data_dir}-{profile_number}"
                         persist_kwargs = dict(launch_kwargs)
                         if settings.get_slow_mo_ms():
                             persist_kwargs["slow_mo"] = settings.get_slow_mo_ms()
