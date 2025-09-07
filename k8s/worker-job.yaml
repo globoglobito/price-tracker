@@ -7,8 +7,8 @@ metadata:
     app: ebay-workers
     project: price-tracker
 spec:
-  parallelism: 3  # 3 worker pods as requested
-  completions: 3  # Complete when all 3 have finished processing
+  parallelism: 4  # 4 parallel workers
+  # No completions - worker should process all messages in queue
   ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
   template:
     metadata:
@@ -92,7 +92,7 @@ spec:
         - name: snapshots-dir
           mountPath: /app/local-stuff-ignore/snapshots
         - name: profile-dir
-          mountPath: /app/local-stuff-ignore/profile-ebay
+          mountPath: /app/local-stuff-ignore
       volumes:
       - name: debug-dir
         hostPath:
@@ -104,5 +104,5 @@ spec:
           type: DirectoryOrCreate
       - name: profile-dir
         hostPath:
-          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
+          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore
           type: DirectoryOrCreate

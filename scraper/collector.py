@@ -34,7 +34,14 @@ class EbayCollector:
         self.max_pages = settings.get_max_pages()
         self.headless = settings.is_headless()
         self.browser_name = settings.get_browser_type()
-        self.user_data_dir = settings.get_user_data_dir()
+        # Use unique profile directory per collector to avoid conflicts
+        base_user_data_dir = settings.get_user_data_dir()
+        if base_user_data_dir:
+            import os
+            worker_id = os.environ.get('HOSTNAME', 'collector')
+            self.user_data_dir = f"{base_user_data_dir}-{worker_id}"
+        else:
+            self.user_data_dir = None
         self.slow_mo_ms = settings.get_slow_mo_ms()
         self.debug_snapshot_dir = settings.get_debug_snapshot_dir()
         self.timeout_ms = settings.get_timeout_ms()
@@ -134,8 +141,22 @@ class EbayCollector:
                 self.queue_manager.disconnect()
             except Exception as e:
                 logger.error(f"Failed to disconnect from queue: {e}")
+            
+            self._cleanup_profile()
         
         return stats
+    
+    def _cleanup_profile(self):
+        """Clean up the unique profile directory created for this collector."""
+        if self.user_data_dir:
+            try:
+                import shutil
+                import os
+                if os.path.exists(self.user_data_dir):
+                    shutil.rmtree(self.user_data_dir)
+                    logger.info(f"Cleaned up profile directory: {self.user_data_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup profile directory {self.user_data_dir}: {e}")
     
     def run(self) -> None:
         """Run the collector."""

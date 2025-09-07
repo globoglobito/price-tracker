@@ -36,6 +36,7 @@ class EbayWorker:
         self.running = True
         self.processed_count = 0
         self.failed_count = 0
+        self.user_data_dir = None  # Track for cleanup
         
         # Get configuration
         self.snapshot_dir = settings.get_snapshot_dir()
@@ -114,15 +115,13 @@ class EbayWorker:
                 
                 try:
                     # Persistent context if user data dir provided (like monolithic)
-                    # Use one of 4 reusable profile directories to avoid conflicts while maintaining persistence
+                    # Use unique profile directory per worker to avoid conflicts
                     base_user_data_dir = settings.get_user_data_dir()
                     if base_user_data_dir and settings.get_browser_type() in ("chromium", "firefox"):
                         import os
-                        import hashlib
-                        # Use hash of hostname to deterministically assign one of 4 profiles
-                        hostname = os.environ.get('HOSTNAME', 'worker')
-                        profile_number = int(hashlib.md5(hostname.encode()).hexdigest(), 16) % 4 + 1
-                        user_data_dir = f"{base_user_data_dir}-{profile_number}"
+                        worker_id = os.environ.get('HOSTNAME', 'worker')
+                        user_data_dir = f"{base_user_data_dir}-{worker_id}"
+                        self.user_data_dir = user_data_dir  # Track for cleanup
                         persist_kwargs = dict(launch_kwargs)
                         if settings.get_slow_mo_ms():
                             persist_kwargs["slow_mo"] = settings.get_slow_mo_ms()
@@ -221,7 +220,20 @@ class EbayWorker:
             except Exception as e:
                 logger.error(f"Failed to disconnect from queue: {e}")
             
+            self._cleanup_profile()
             logger.info(f"Worker shutdown complete. Processed: {self.processed_count}, Failed: {self.failed_count}")
+    
+    def _cleanup_profile(self):
+        """Clean up the unique profile directory created for this worker."""
+        if self.user_data_dir:
+            try:
+                import shutil
+                import os
+                if os.path.exists(self.user_data_dir):
+                    shutil.rmtree(self.user_data_dir)
+                    logger.info(f"Cleaned up profile directory: {self.user_data_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup profile directory {self.user_data_dir}: {e}")
 
 
 def main():
