@@ -122,6 +122,10 @@ class EbayWorker:
                         worker_id = os.environ.get('HOSTNAME', 'worker')
                         user_data_dir = f"{base_user_data_dir}-{worker_id}"
                         self.user_data_dir = user_data_dir  # Track for cleanup
+                        
+                        # Pre-create the directory with proper permissions before Chromium uses it
+                        os.makedirs(user_data_dir, mode=0o777, exist_ok=True)
+                        
                         persist_kwargs = dict(launch_kwargs)
                         if settings.get_slow_mo_ms():
                             persist_kwargs["slow_mo"] = settings.get_slow_mo_ms()
