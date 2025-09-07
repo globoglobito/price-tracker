@@ -164,13 +164,27 @@ class QueueManager:
         logger.info(f"Published {published_count}/{len(listings)} listings for enrichment")
         return published_count
         
-    def consume_listing_for_enrichment(self, callback_func, auto_ack: bool = False):
+    def get_queue_message_count(self, queue_name: str) -> int:
+        """Get the number of messages in a queue."""
+        if not self.channel:
+            logger.error("No channel available - call connect() first")
+            return 0
+        
+        try:
+            method = self.channel.queue_declare(queue=queue_name, passive=True)
+            return method.method.message_count
+        except Exception as e:
+            logger.error(f"Failed to get queue count for {queue_name}: {e}")
+            return 0
+
+    def consume_listing_for_enrichment(self, callback_func, auto_ack: bool = False, max_empty_polls: int = 10):
         """
         Consume listings from enrichment queue.
         
         Args:
             callback_func: Function to call for each message (ch, method, properties, body)
             auto_ack: Whether to automatically acknowledge messages
+            max_empty_polls: Number of empty polls before graceful shutdown
         """
         if not self.channel:
             logger.error("No channel available - call connect() first")
@@ -185,11 +199,38 @@ class QueueManager:
         )
         
         logger.info("Starting to consume enrichment tasks...")
+        empty_polls = 0
+        
         try:
-            self.channel.start_consuming()
+            while True:
+                # Check if there are messages in the queue
+                message_count = self.get_queue_message_count(self.ENRICHMENT_QUEUE)
+                
+                if message_count == 0:
+                    empty_polls += 1
+                    logger.info(f"Queue empty, poll {empty_polls}/{max_empty_polls}")
+                    
+                    if empty_polls >= max_empty_polls:
+                        logger.info("Queue empty for too long, gracefully shutting down worker")
+                        break
+                        
+                    # Wait a bit before checking again
+                    import time
+                    time.sleep(5)
+                    continue
+                else:
+                    empty_polls = 0  # Reset counter when messages are found
+                
+                # Process messages with timeout
+                self.connection.process_data_events(time_limit=10)
+                
         except KeyboardInterrupt:
             logger.info("Stopping consumer...")
-            self.channel.stop_consuming()
+        finally:
+            try:
+                self.channel.stop_consuming()
+            except Exception:
+                pass
             
     def get_queue_stats(self) -> Dict[str, int]:
         """
