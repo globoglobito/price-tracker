@@ -7,7 +7,7 @@ metadata:
     app: ebay-workers
     project: price-tracker
 spec:
-  parallelism: 4  # 4 parallel workers
+  parallelism: 8  # 8 parallel workers
   # No completions - worker should process all messages in queue
   ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
   template:
@@ -17,6 +17,10 @@ spec:
         project: price-tracker
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       imagePullSecrets:
         - name: docker-registry-secret
       containers:
@@ -61,7 +65,7 @@ spec:
         - name: BROWSER
           value: "chromium"
         - name: USER_DATA_DIR
-          value: "/app/local-stuff-ignore/profile-ebay"
+          value: "/app/local-stuff-ignore/profiles"
         - name: SNAPSHOT_DIR
           value: "/app/local-stuff-ignore/snapshots"
         - name: DEBUG_SNAPSHOT_DIR
@@ -92,7 +96,7 @@ spec:
         - name: snapshots-dir
           mountPath: /app/local-stuff-ignore/snapshots
         - name: profile-dir
-          mountPath: /app/local-stuff-ignore
+          mountPath: /app/local-stuff-ignorelicating
       volumes:
       - name: debug-dir
         hostPath:

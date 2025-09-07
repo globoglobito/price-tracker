@@ -120,8 +120,7 @@ class EbayWorker:
                     if base_user_data_dir and settings.get_browser_type() in ("chromium", "firefox"):
                         import os
                         worker_id = os.environ.get('HOSTNAME', 'worker')
-                        # Use profiles subdirectory to avoid permission issues
-                        user_data_dir = f"{base_user_data_dir.rstrip('/')}/profiles/{worker_id}"
+                        user_data_dir = f"{base_user_data_dir}/{worker_id}"
                         self.user_data_dir = user_data_dir  # Track for cleanup
                         
                         # Pre-create the directory with proper permissions before Chromium uses it
