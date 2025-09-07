@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented here.
 
+## [v0.2.0] - 2025-01-08
+
+### 🔧 **Major Refactoring**
+- **Scraper Architecture Redesign**: Completely refactored the eBay scraper from a single 1110-line file into a modular, maintainable architecture
+- **Code Organization**: Split scraper into focused modules:
+  - `config/settings.py` - Environment variable handling (150 lines)
+  - `utils/bot_detection.py` - Anti-bot detection utilities (80 lines)  
+  - `utils/timeout_manager.py` - Timeout management with 4-minute extraction timeout (100 lines)
+  - `extractors/results_parser.py` - Search results parsing (150 lines)
+  - `extractors/listing_enricher.py` - Individual listing enrichment (350 lines)
+- **Improved Maintainability**: 59% reduction in main file size (1110 → 454 lines)
+- **Enhanced Testability**: Each component can now be unit tested independently
+- **Better Separation of Concerns**: Clear boundaries between configuration, utilities, and data extraction
+
+### 🐛 **Bug Fixes**
+- **Fixed Extraction Timeout Issue**: Added comprehensive timeout protection to prevent scraper hanging during data extraction
+- **Improved Error Handling**: Better timeout detection and graceful fallback for problematic listings
+- **Test Infrastructure**: Fixed broken imports and added comprehensive test coverage for new modules
+
+### ✅ **Backward Compatibility**
+- **Production Entry Point**: `python -m scraper.playwright_ebay_scraper` continues to work unchanged
+- **API Compatibility**: All external interfaces remain the same
+- **Configuration**: All environment variables work exactly as before
+- **Docker/K8s**: No changes needed for containerized deployments
+
+### 📚 **Documentation**
+- **Updated Project Structure**: README now reflects the new modular architecture
+- **Test Coverage**: Added unit tests for configuration, results parsing, and utility functions
+- **Code Documentation**: Enhanced docstrings and module-level documentation
+
 ## [v0.1.0] - 2025-08-04
 
 ### ✨ Features

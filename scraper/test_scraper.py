@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scraper.ebay_scraper import EbayScraper
+from scraper.playwright_ebay_scraper import EbayBrowserScraper
 import json
 
 
@@ -22,10 +22,10 @@ def test_scraper():
     
     try:
         # Initialize scraper with conservative settings
-        scraper = EbayScraper(
+        scraper = EbayBrowserScraper(
             search_term=search_term,
             max_pages=3,  # Test 3 pages to get more results
-            delay=3.0     # 3 second delay
+            delay_seconds=3.0     # 3 second delay
         )
         
         # Run the scraper

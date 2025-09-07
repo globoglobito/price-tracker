@@ -72,11 +72,11 @@ spec:
                   value: ".svc,.cluster.local,localhost,127.0.0.1"
                 # Local persistence for snapshots and browser profile
                 - name: DEBUG_SNAPSHOT_DIR
-                  value: "/tmp/debug"
+                  value: "/app/local-stuff-ignore/debug"
                 - name: SNAPSHOT_DIR
-                  value: "/tmp/snapshots"
+                  value: "/app/local-stuff-ignore/snapshots"
                 - name: USER_DATA_DIR
-                  value: "/tmp/profile-ebay"
+                  value: "/app/local-stuff-ignore/profile-ebay"
                 - name: SLOW_MO_MS
                   value: "50"
                 - name: MAIN_PAGE_MIN_WAIT_S
@@ -110,23 +110,23 @@ spec:
                   memory: "1Gi"
               volumeMounts:
                 - name: debug-dir
-                  mountPath: /tmp/debug
+                  mountPath: /app/local-stuff-ignore/debug
                 - name: snapshots-dir
-                  mountPath: /tmp/snapshots
+                  mountPath: /app/local-stuff-ignore/snapshots
                 - name: profile-dir
-                  mountPath: /tmp/profile-ebay
+                  mountPath: /app/local-stuff-ignore/profile-ebay
 
           volumes:
             - name: debug-dir
               hostPath:
-                path: /var/snap/microk8s/common/price-tracker/debug
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
                 type: DirectoryOrCreate
             - name: snapshots-dir
               hostPath:
-                path: /var/snap/microk8s/common/price-tracker/snapshots
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/snapshots
                 type: DirectoryOrCreate
             - name: profile-dir
               hostPath:
-                path: /var/snap/microk8s/common/price-tracker/profile-ebay
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
                 type: DirectoryOrCreate
 

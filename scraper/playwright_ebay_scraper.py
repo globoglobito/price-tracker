@@ -22,6 +22,13 @@ import time
 import random
 import pathlib
 
+# Import extracted utilities
+from scraper.config import settings
+from scraper.utils.bot_detection import is_block_page, save_debug_snapshot
+from scraper.utils.timeout_manager import TimeoutManager
+from scraper.extractors.results_parser import parse_listing_elements, clean_ebay_url
+from scraper.extractors.listing_enricher import ListingEnricher
+
 import importlib
 try:
     from scraper.db import upsert_listings, get_or_create_search, fetch_existing_listing_ids, mark_missing_inactive
@@ -63,6 +70,10 @@ class EbayBrowserScraper:
         user_data_dir: Optional[str] = None,
         slow_mo_ms: int = 0,
         debug_snapshot_dir: Optional[str] = None,
+        snapshot_dir: Optional[str] = None,
+        enrich_limit: int = 0,
+        screenshot_timeout_ms: int = 10000,
+        content_timeout_ms: int = 5000,
     ) -> None:
         self.search_term = search_term
         self.max_pages = max_pages
@@ -75,9 +86,25 @@ class EbayBrowserScraper:
         self.debug_snapshot_dir = debug_snapshot_dir
         self.user_data_dir = user_data_dir
         self.slow_mo_ms = slow_mo_ms
+        self.snapshot_dir = snapshot_dir
+        self.enrich_limit = enrich_limit
+        self.screenshot_timeout_ms = screenshot_timeout_ms
+        self.content_timeout_ms = content_timeout_ms
         # Track last results page URL and load time for referer-aware enrichment and delay
         self._last_results_url: Optional[str] = None
         self._last_results_loaded_at: Optional[float] = None
+        
+        # Initialize timeout manager
+        self.timeout_manager = TimeoutManager(extraction_timeout_seconds=240)
+        
+        # Initialize listing enricher
+        self.enricher = ListingEnricher(
+            snapshot_dir=snapshot_dir,
+            debug_snapshot_dir=debug_snapshot_dir,
+            timeout_ms=timeout_ms,
+            screenshot_timeout_ms=screenshot_timeout_ms,
+            content_timeout_ms=content_timeout_ms
+        )
 
     def _build_search_url(self, page_number: int) -> str:
         base_url = "https://www.ebay.com/sch/i.html"
@@ -159,16 +186,7 @@ class EbayBrowserScraper:
 
     def _clean_ebay_url(self, url: Optional[str]) -> Optional[str]:
         """Return canonical https://www.ebay.com/itm/<id> if an item id is present."""
-        if not url:
-            return url
-        try:
-            import re as _re
-            m = _re.search(r"/itm/(\d+)", url)
-            if m:
-                return f"https://www.ebay.com/itm/{m.group(1)}"
-        except Exception:
-            pass
-        return url
+        return clean_ebay_url(url)
 
     def _navigate_to_listing(self, page: Any, item: Dict, nav_mode: str) -> None:
         """Navigate to a listing detail page using click-through when possible.
@@ -207,177 +225,16 @@ class EbayBrowserScraper:
             page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
 
     def _is_block_page(self, page: Any) -> bool:
-        """Detect anti-bot challenge using visible body text and strong structural hints.
-
-        Avoid scanning raw HTML for generic tokens (like CSS class names) to reduce false positives.
-        """
-        body_text = ""
-        try:
-            # Only visible text content
-            if page.is_visible('body'):
-                body_text = (page.inner_text('body') or "").lower()
-        except Exception:
-            body_text = ""
-
-        # Strong textual markers typically shown to users
-        text_markers = [
-            "verify you're a human",
-            "not a robot",
-            "enter the characters you see",
-            "access to this page has been denied",
-            "checking your browser before you access ebay",
-            "pardon our interruption",
-            "reference id:",
-        ]
-        if any(marker in body_text for marker in text_markers if marker):
-            return True
-
-        # Structural/metadata hints (best-effort, require at least one visible hint to be safer)
-        try:
-            if page.locator("form#destForm").count() > 0:
-                return True
-            if page.locator("script[src*=\"challenge-\"]").count() > 0 and (
-                "checking your browser" in body_text or "reference id" in body_text
-            ):
-                return True
-        except Exception:
-            pass
-        return False
+        """Detect anti-bot challenge using visible body text and strong structural hints."""
+        return is_block_page(page)
 
     def _snapshot_debug(self, page: Any, label: str) -> None:
-        if not self.debug_snapshot_dir:
-            return
-        try:
-            os.makedirs(self.debug_snapshot_dir, exist_ok=True)
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            base = os.path.join(self.debug_snapshot_dir, f"{ts}_{label}")
-            # Screenshot
-            try:
-                page.screenshot(path=f"{base}.png", full_page=True)
-            except Exception:
-                pass
-            # HTML
-            try:
-                with open(f"{base}.html", "w", encoding="utf-8") as f:
-                    f.write(page.content())
-            except Exception:
-                pass
-            logger.info(f"Saved debug snapshot: {base}.[png|html]")
-        except Exception:
-            pass
+        """Save debug snapshots using extracted utility."""
+        save_debug_snapshot(page, self.debug_snapshot_dir, label)
 
     def _parse_listing_elements(self, page: Any) -> List[Dict]:
-        # Try both old (.s-item) and new (.s-card) eBay formats
-        items = page.query_selector_all(".s-item, .s-card")
-        listings: List[Dict] = []
-        for item in items:
-            try:
-                # Try new format first, then fall back to old format
-                title_elem = (item.query_selector(".s-card__title .su-styled-text") or 
-                            item.query_selector(".s-card__title a .su-styled-text") or 
-                            item.query_selector(".s-item__title"))
-                if not title_elem:
-                    continue
-
-                title = (title_elem.inner_text() or "").strip()
-                if title == "Shop on eBay":
-                    continue
-
-                # Try new format link, then old format
-                link_elem = item.query_selector("a[href*='/itm/']") or item.query_selector(".s-item__link")
-                url = link_elem.get_attribute("href") if link_elem else None
-
-                # Try new format price, then old format
-                price_elem = (item.query_selector(".s-card__price .su-styled-text") or 
-                            item.query_selector(".s-card__attribute-row .su-styled-text.s-card__price") or
-                            item.query_selector(".s-item__price"))
-                price_text = price_elem.inner_text().strip() if price_elem else ""
-                price = _extract_price_from_text(price_text)
-                if price is None:
-                    continue
-
-                # Try new format condition, then old format
-                condition_elem = (item.query_selector(".s-card__subtitle .su-styled-text") or 
-                                item.query_selector(".s-item__condition, .s-item__subtitle, .s-item__details"))
-                condition_text = (condition_elem.inner_text() if condition_elem else "").lower()
-                condition: Optional[str] = None
-                if "used" in condition_text or "pre-owned" in condition_text:
-                    condition = "Used"
-                elif "new" in condition_text or "brand new" in condition_text:
-                    condition = "New"
-                elif "open box" in condition_text:
-                    condition = "Open box"
-                elif "for parts" in condition_text or "not working" in condition_text:
-                    condition = "For parts or not working"
-                elif "refurbished" in condition_text:
-                    condition = "Certified - Refurbished"
-                else:
-                    condition = "Not Specified"
-
-                # Try new format location, then old format  
-                location_elem = (item.query_selector(".s-card__attribute-row:has-text('Located in') .su-styled-text") or
-                               item.query_selector(".s-item__location"))
-                seller_location = (location_elem.inner_text().strip() if location_elem else None)
-                # Clean up "Located in " prefix from new format
-                if seller_location and seller_location.startswith("Located in "):
-                    seller_location = seller_location[11:]
-
-                # Try new format shipping, then old format
-                shipping_elem = (item.query_selector(".s-card__attribute-row:has-text('delivery') .su-styled-text, .s-card__attribute-row:has-text('Shipping') .su-styled-text") or
-                               item.query_selector(".s-item__shipping"))
-                shipping_info = (shipping_elem.inner_text().strip() if shipping_elem else None)
-
-                listing_id = None
-                if url:
-                    match = re.search(r"/itm/(\d+)", url)
-                    if match:
-                        listing_id = match.group(1)
-                cleaned_url = self._clean_ebay_url(url)
-
-                brand = None
-                model = None
-                type_info = None
-                tl = title.lower()
-                if "selmer" in tl:
-                    brand = "Selmer"
-                    if "mark vi" in tl:
-                        model = "Mark VI"
-                elif "yamaha" in tl:
-                    brand = "Yamaha"
-                    model_match = re.search(r"Y[AT]S?[-\s]?(\d+)", title, re.IGNORECASE)
-                    if model_match:
-                        model = f"YTS-{model_match.group(1)}"
-
-                if "tenor" in tl:
-                    type_info = "Tenor"
-                elif "alto" in tl:
-                    type_info = "Alto"
-                elif "soprano" in tl:
-                    type_info = "Soprano"
-                elif "baritone" in tl:
-                    type_info = "Baritone"
-
-                listings.append(
-                    {
-                        "title": title,
-                        "price": price,
-                        "url": cleaned_url if listing_id else url,
-                        "listing_id": listing_id,
-                        "condition": condition,
-                        "seller_location": seller_location,
-                        "shipping_info": shipping_info,
-                        "brand": brand,
-                        "model": model,
-                        "type": type_info,
-                        "currency": "USD",
-                        "website": "ebay",
-                        "scraped_at": datetime.now().isoformat(),
-                    }
-                )
-            except Exception as parse_err:
-                logger.debug(f"Parse error for an item: {parse_err}")
-
-        return listings
+        """Parse listing elements using extracted results parser."""
+        return parse_listing_elements(page)
 
     def _accept_cookies_if_present(self, page: Any) -> None:
         try:
@@ -600,476 +457,39 @@ class EbayBrowserScraper:
         return text or "listing"
 
     def _maybe_enrich_and_snapshot(self, page: Any, listings: List[Dict]) -> None:
-        
-        def _human_like_settle(min_seconds: float, max_seconds: float) -> None:
-            """Human-like settle with per-step time checks to enforce max duration.
-
-            Keeps interactions (mouse/keys/JS) but checks elapsed after EVERY micro-step
-            and immediately exits once max_seconds is reached. Ensures at least
-            min_seconds of total elapsed time by topping up with a short sleep if needed.
-            """
-            start_time = time.perf_counter()
-
-            def elapsed() -> float:
-                return time.perf_counter() - start_time
-
-            # Small initial idle without blocking browser events
-            time.sleep(min(0.3, max_seconds))
-
-            # Perform a few tiny human-like nudges with strict elapsed checks
-            for i in range(3):
-                if elapsed() >= max_seconds:
-                    break
-
-                # Mouse move (best-effort)
-                try:
-                    x = random.randint(80, 900)
-                    y = random.randint(200, 800)
-                    page.mouse.move(x, y, steps=random.randint(6, 12))
-                except Exception:
-                    pass
-                if elapsed() >= max_seconds:
-                    break
-
-                # Key taps (best-effort)
-                try:
-                    if i == 0:
-                        page.keyboard.press("PageDown")
-                    elif random.random() < 0.6:
-                        page.keyboard.press("ArrowDown")
-                except Exception:
-                    pass
-                if elapsed() >= max_seconds:
-                    break
-
-                # JS scroll using rAF to avoid sync layout
-                try:
-                    delta = random.randint(200, 500)
-                    page.evaluate("window.requestAnimationFrame(() => window.scrollBy(0, arguments[0]));", delta)
-                except Exception:
-                    pass
-                if elapsed() >= max_seconds:
-                    break
-
-                # Brief pause
-                time.sleep(0.2)
-
-            # Top up to min_seconds if we finished too quickly, without exceeding max
-            if elapsed() < min_seconds:
-                top_up = min(min_seconds - elapsed(), max(0.0, max_seconds - elapsed()))
-                if top_up > 0:
-                    time.sleep(top_up)
-
-            logger.info(
-                f"Step 4: Human-like settle completed in {elapsed():.2f}s (min {min_seconds:.2f}s, max {max_seconds:.2f}s)"
-            )
-
-        # Environment-driven behavior
-        snapshot_dir = os.environ.get("SNAPSHOT_DIR")
-        enrich_limit = int(os.environ.get("ENRICH_LIMIT", "0"))
-        # Bound or disable settle via env
-        disable_settle_env = os.environ.get("DISABLE_SETTLE", "false").lower() in ("1", "true", "yes")
-        try:
-            human_settle_min_s = float(os.environ.get("HUMAN_SETTLE_MIN_S", "2"))
-        except Exception:
-            human_settle_min_s = 2.0
-        try:
-            human_settle_max_s = float(os.environ.get("HUMAN_SETTLE_MAX_S", "8"))
-        except Exception:
-            human_settle_max_s = 8.0
-        # Ensure sane bounds
-        if human_settle_min_s < 0:
-            human_settle_min_s = 0.0
-        if human_settle_max_s < human_settle_min_s:
-            human_settle_max_s = human_settle_min_s
-        allowed_conditions_env = os.environ.get(
-            "ALLOWED_CONDITIONS",
-            "Used,For parts or not working,Not Specified",
-        )
-        allowed_conditions = {c.strip().lower() for c in allowed_conditions_env.split(",")}
-
-        # Filter by allowed conditions
-        filtered = [
-            l for l in listings
-            if (l.get("condition") or "").lower() in allowed_conditions
-        ]
-        if enrich_limit == 0 and not snapshot_dir:
-            # Only filtering requested – replace the list contents
-            listings[:] = filtered
-            logger.info(
-                f"Filtered listings by condition. Before: {len(listings)} After: {len(filtered)}"
-            )
-            return
-
-        listings[:] = filtered
-        if not snapshot_dir:
-            return
-
-        pathlib.Path(snapshot_dir).mkdir(parents=True, exist_ok=True)
-        subset = listings if enrich_limit <= 0 else listings[:enrich_limit]
-        logger.info(f"Enriching {len(subset)} listings with snapshots → {snapshot_dir}")
-
-        # Enforce a minimum wait after results page before enrichment
-        try:
-            min_wait_s = float(os.environ.get("MAIN_PAGE_MIN_WAIT_S", "6"))
-        except Exception:
-            min_wait_s = 6.0
-        if min_wait_s > 0:
-            now = time.monotonic()
-            last_load = self._last_results_loaded_at or (now - 0.0)
-            remaining = max(0.0, min_wait_s - (now - last_load))
-            if remaining > 0:
-                logger.info(f"Waiting {remaining:.2f}s after results page before enrichment (min {min_wait_s:.2f}s)")
-                time.sleep(remaining)
-
-        nav_mode = (os.environ.get("ENRICH_NAV_MODE", "auto") or "auto").lower()
-        try:
-            jitter_min = float(os.environ.get("ENRICH_JITTER_MIN_S", "0.5"))
-            jitter_max = float(os.environ.get("ENRICH_JITTER_MAX_S", "2.0"))
-        except Exception:
-            jitter_min, jitter_max = 0.5, 2.0
-        for idx, item in enumerate(subset, 1):
-            url = item.get("url")
-            if not url:
-                continue
-            try:
-                logger.info(f"Enriching listing {idx}/{len(subset)}: {item.get('title', 'Unknown')[:50]}...")
-                logger.info(f"Step 1: Loading page: {url} (nav_mode={nav_mode})")
-                self._navigate_to_listing(page, item, nav_mode)
-                logger.info(f"Step 2: Page loaded successfully")
-                # Detect anti-bot challenge immediately and skip enrichment while saving evidence
-                if self._is_block_page(page):
-                    # Recheck-on-block with waits/reloads
-                    block_recheck = os.environ.get("BLOCK_RECHECK", "true").lower() in ("1", "true", "yes")
-                    try:
-                        block_max_retries = int(os.environ.get("BLOCK_MAX_RETRIES", "3"))
-                    except Exception:
-                        block_max_retries = 3
-                    try:
-                        block_wait_min = float(os.environ.get("BLOCK_WAIT_MIN_S", "5"))
-                        block_wait_max = float(os.environ.get("BLOCK_WAIT_MAX_S", "10"))
-                    except Exception:
-                        block_wait_min, block_wait_max = 5.0, 10.0
-                    block_reload = os.environ.get("BLOCK_RELOAD", "true").lower() in ("1", "true", "yes")
-
-                    def _snapshot_block(label_suffix: str = "BLOCKED") -> None:
-                        try:
-                            if snapshot_dir:
-                                base = f"{idx:02d}_" + self._sanitize_filename(item.get("title") or "listing") + f"_{label_suffix}"
-                                png_path = os.path.join(snapshot_dir, base + ".png")
-                                html_path = os.path.join(snapshot_dir, base + ".html")
-                                try:
-                                    page.screenshot(path=png_path, full_page=True, timeout=self.screenshot_timeout_ms)
-                                except Exception:
-                                    pass
-                                try:
-                                    page.set_default_timeout(self.content_timeout_ms)
-                                    with open(html_path, "w", encoding="utf-8") as f:
-                                        f.write(page.content())
-                                    page.set_default_timeout(self.timeout_ms)
-                                except Exception:
-                                    try:
-                                        page.set_default_timeout(self.timeout_ms)
-                                    except Exception:
-                                        pass
-                        except Exception:
-                            pass
-
-                    logger.warning("Anti-bot challenge detected (k8s scraper)")
-                    _snapshot_block("BLOCKED")
-                    blocked = True
-                    if block_recheck and block_max_retries > 0:
-                        for attempt in range(1, block_max_retries + 1):
-                            wait_s = block_wait_min + random.random() * max(0.0, (block_wait_max - block_wait_min))
-                            logger.info(f"Block retry {attempt}/{block_max_retries}: waiting {wait_s:.1f}s")
-                            time.sleep(wait_s)
-                            if block_reload:
-                                try:
-                                    page.reload(wait_until="domcontentloaded", timeout=self.timeout_ms)
-                                except Exception:
-                                    pass
-                            # brief dwell
-                            try:
-                                page.mouse.move(200 + random.randint(0, 200), 300 + random.randint(0, 200))
-                                time.sleep(0.5)
-                            except Exception:
-                                pass
-                            try:
-                                if not self._is_block_page(page):
-                                    logger.info("Block cleared after retry")
-                                    blocked = False
-                                    break
-                            except Exception:
-                                pass
-                    if blocked:
-                        continue
-                
-                # Human-like settle to avoid bot detection and prevent hangs in headless
-                if disable_settle_env or human_settle_max_s <= 0:
-                    logger.info("Step 3: Human-like settle disabled by env; proceeding")
-                else:
-                    logger.info(f"Step 3: Human-like settle (min {human_settle_min_s:.1f}s, max {human_settle_max_s:.1f}s)")
-                    _human_like_settle(human_settle_min_s, human_settle_max_s)
-                
-                # Save screenshot and html
-                logger.info(f"Step 5: Preparing to save snapshots")
-                base = f"{idx:02d}_" + self._sanitize_filename(item.get("title") or "listing")
-                png_path = os.path.join(snapshot_dir, base + ".png")
-                html_path = os.path.join(snapshot_dir, base + ".html")
-                
-                logger.info(f"Step 6: Taking screenshot")
-                try:
-                    page.screenshot(path=png_path, full_page=True, timeout=self.screenshot_timeout_ms)
-                    logger.info(f"Step 7: Screenshot saved successfully")
-                except Exception as e:
-                    logger.info(f"Step 7: Screenshot failed: {e}")
-                
-                logger.info(f"Step 8: Saving HTML content")
-                try:
-                    with open(html_path, "w", encoding="utf-8") as f:
-                        # Set a shorter timeout for getting page content
-                        page.set_default_timeout(self.content_timeout_ms)
-                        f.write(page.content())
-                        page.set_default_timeout(self.timeout_ms)  # Reset to default
-                    logger.info(f"Step 9: HTML content saved successfully")
-                except Exception as e:
-                    page.set_default_timeout(self.timeout_ms)  # Reset on error too
-                    logger.info(f"Step 9: HTML save failed: {e}")
-                
-                logger.info(f"Step 10: Snapshots complete - {png_path}")
-                # Lightweight enrichment on detail page
-                logger.info(f"Step 11: Starting data extraction")
-                # Shipping extraction now relies on shipping_info captured from results cards
-                # and schema no longer stores numeric shipping_cost. Skipping detail-page cost parsing.
-                # Location and region
-                location_text = None
-                region = None
-                try:
-                    loc_sel = [
-                        'div.ux-seller-section__itemLocation span.ux-textspans',
-                        'div.ux-seller-section__itemLocation',
-                        'div.d-item-location',
-                        '#itemLocation',
-                        'span[itemprop="availableAtOrFrom"]',
-                        'div#RightSummaryPanel div.u-flL.iti-eu-bld-gry',
-                    ]
-                    for s in loc_sel:
-                        el = page.query_selector(s)
-                        if el:
-                            location_text = (el.inner_text() or '').strip()
-                            if location_text:
-                                break
-                    if not location_text:
-                        for el in page.query_selector_all('span, div, li')[:2000]:
-                            t = (el.inner_text() or '').strip()
-                            tl = t.lower()
-                            if not t:
-                                continue
-                            if tl.startswith('located in'):
-                                location_text = t.replace('Located in', '').strip(); break
-                            if 'item location' in tl:
-                                parts = t.split(':', 1)
-                                location_text = parts[1].strip() if len(parts) > 1 else t; break
-                    if location_text:
-                        ll = location_text.lower()
-                        if any(term in ll for term in ['united states', 'usa', 'u.s.a', 'us']):
-                            region = 'USA'
-                        elif any(term in ll for term in [
-                            'united kingdom','england','scotland','wales','northern ireland','ireland','republic of ireland',
-                            'france','germany','italy','spain','portugal','belgium','netherlands','luxembourg','austria','switzerland',
-                            'sweden','norway','denmark','finland','iceland','poland','czech','czech republic','slovakia','hungary','greece',
-                            'romania','bulgaria','croatia','slovenia','estonia','latvia','lithuania','serbia','bosnia','montenegro',
-                            'albania','north macedonia','moldova','ukraine'
-                        ]):
-                            region = 'Europe'
-                        else:
-                            region = 'Other'
-                except Exception:
-                    pass
-                # Attach to item for DB (no shipping_cost field in schema)
-                if location_text:
-                    item['seller_location'] = location_text
-                    item['location_text'] = location_text
-                if region:
-                    item['region'] = region
-                # Small deterministic cooldown (kept short)
-                time.sleep(0.3)
-
-                # Detect Best Offer availability
-                try:
-                    has_best_offer = False
-                    try:
-                        # Buttons/links typically present on OBO listings
-                        if page.locator("button:has-text('Make offer')").count() > 0:
-                            has_best_offer = True
-                        elif page.locator("button:has-text('Make Offer')").count() > 0:
-                            has_best_offer = True
-                        elif page.locator("a:has-text('Make offer')").count() > 0:
-                            has_best_offer = True
-                        elif page.locator("a:has-text('Make Offer')").count() > 0:
-                            has_best_offer = True
-                    except Exception:
-                        pass
-                    if not has_best_offer:
-                        # Fallback: scan body text for "Best Offer"
-                        try:
-                            txt = (page.inner_text('body') or '').lower()
-                            if 'best offer' in txt:
-                                has_best_offer = True
-                        except Exception:
-                            pass
-                    if has_best_offer:
-                        item['has_best_offer'] = True
-                except Exception:
-                    pass
-
-                # Detect auction end time (best-effort)
-                try:
-                    detected_end: Optional[str] = None
-                    # Try JSON-LD offers
-                    try:
-                        handles = page.query_selector_all("script[type='application/ld+json']")
-                        for h in handles:
-                            try:
-                                raw = h.inner_text() or ''
-                                import json as _json
-                                data = _json.loads(raw)
-                                def _walk(obj):
-                                    nonlocal detected_end
-                                    if detected_end:
-                                        return
-                                    if isinstance(obj, dict):
-                                        for k, v in obj.items():
-                                            if isinstance(v, (dict, list)):
-                                                _walk(v)
-                                            elif isinstance(v, str) and k.lower() in ("enddate", "availabilityends", "pricevaliduntil", "end_time", "end") and not detected_end:
-                                                detected_end = v
-                                    elif isinstance(obj, list):
-                                        for it in obj:
-                                            _walk(it)
-                                _walk(data)
-                                if detected_end:
-                                    break
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-
-                    # Try DOM attributes commonly used for timers
-                    if not detected_end:
-                        try:
-                            cand = page.query_selector('div#vi-cdown')
-                            if not cand:
-                                cand = page.query_selector('[data-end-date], [data-endtime], [data-end_datetime]')
-                            if cand:
-                                v = cand.get_attribute('data-end-date') or cand.get_attribute('data-endtime') or cand.get_attribute('data-end_datetime')
-                                if not v:
-                                    for el in cand.query_selector_all('*')[:20]:
-                                        v = el.get_attribute('data-end-date') or el.get_attribute('data-endtime') or el.get_attribute('data-end_datetime')
-                                        if v:
-                                            break
-                                if v:
-                                    detected_end = v
-                        except Exception:
-                            pass
-
-                    # Try time[datetime]
-                    if not detected_end:
-                        try:
-                            tnode = page.query_selector('time[datetime]')
-                            if tnode:
-                                v = tnode.get_attribute('datetime')
-                                if v:
-                                    detected_end = v
-                        except Exception:
-                            pass
-
-                    # Regex ISO in HTML as last resort
-                    if not detected_end:
-                        try:
-                            page.set_default_timeout(self.content_timeout_ms)
-                            html = page.content()
-                            page.set_default_timeout(self.timeout_ms)
-                        except Exception:
-                            html = ''
-                        if html:
-                            m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+\-]\d{2}:\d{2})?)", html)
-                            if m:
-                                detected_end = m.group(1)
-
-                    # Parse and store if seemingly ISO-like
-                    if detected_end:
-                        try:
-                            from datetime import datetime
-                            iso = detected_end.strip().replace('Z', '+00:00')
-                            dt = None
-                            try:
-                                dt = datetime.fromisoformat(iso)
-                            except Exception:
-                                dt = None
-                            if dt:
-                                item['auction_end_time'] = dt.isoformat()
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-            except Exception as e:
-                if "timeout" in str(e).lower() or "timeouterror" in str(type(e).__name__).lower():
-                    logger.warning(f"Enrichment timeout for listing {idx}/{len(subset)} ({url}): {e}")
-                    logger.warning(f"Continuing to next listing after timeout...")
-                else:
-                    logger.warning(f"Enrichment failed for listing {idx}/{len(subset)} ({url}): {e}")
-            finally:
-                # Attempt to return to results context for the next listing to preserve referer
-                try:
-                    if self._last_results_url:
-                        page.goto(self._last_results_url, wait_until="domcontentloaded", timeout=self.timeout_ms)
-                        # Random jitter between enrichments
-                        try:
-                            jitter = max(0.0, jitter_min) + random.random() * max(0.0, (jitter_max - jitter_min))
-                        except Exception:
-                            jitter = 0.8
-                        time.sleep(jitter)
-                except Exception:
-                    pass
-        # DB upsert if available
-        if upsert_listings:
-            try:
-                count = upsert_listings(listings)
-                logger.info(f"Upserted {count} listings into DB")
-            except Exception as e:
-                logger.warning(f"DB upsert failed: {e}")
+        """Enrich listings using extracted listing enricher."""
+        self.enricher.enrich_and_snapshot(page, listings, self.enrich_limit)
 
 
 def main() -> None:
-    search_term = os.environ.get("SEARCH_TERM", "Selmer Mark VI")
-    pages = int(os.environ.get("MAX_PAGES", "2"))
-    headless_env = os.environ.get("HEADLESS", "true").lower() in ("1", "true", "yes")
-    delay = float(os.environ.get("REQUEST_DELAY", "2.5"))
-    browser_name = os.environ.get("BROWSER", "chromium").lower()
-    user_data_dir = os.environ.get("USER_DATA_DIR")
-    slow_mo_ms = int(os.environ.get("SLOW_MO_MS", "0"))
-    debug_snapshot_dir = os.environ.get("DEBUG_SNAPSHOT_DIR")
-    timeout_ms = int(os.environ.get("PAGE_TIMEOUT_MS", "30000"))
-    screenshot_timeout_ms = int(os.environ.get("SCREENSHOT_TIMEOUT_MS", "10000"))
-    content_timeout_ms = int(os.environ.get("CONTENT_TIMEOUT_MS", "5000"))
-    element_timeout_ms = int(os.environ.get("ELEMENT_TIMEOUT_MS", "1000"))
-
+    """Main entry point for the scraper when run as a module."""
+    from scraper.config import settings
+    
+    search_term = settings.get_search_term()
+    max_pages = settings.get_max_pages()
+    headless = settings.is_headless()
+    browser_name = settings.get_browser_type()
+    user_data_dir = settings.get_user_data_dir()
+    slow_mo_ms = settings.get_slow_mo_ms()
+    debug_snapshot_dir = settings.get_debug_snapshot_dir()
+    snapshot_dir = settings.get_snapshot_dir()
+    enrich_limit = settings.get_enrich_limit()
+    timeout_ms = settings.get_timeout_ms()
+    
     scraper = EbayBrowserScraper(
         search_term=search_term,
-        max_pages=pages,
-        delay_seconds=delay,
-        headless=headless_env,
+        max_pages=max_pages,
+        delay_seconds=2.5,  # Default delay
+        headless=headless,
         browser_name=browser_name,
         user_data_dir=user_data_dir,
         slow_mo_ms=slow_mo_ms,
         debug_snapshot_dir=debug_snapshot_dir,
+        snapshot_dir=snapshot_dir,
+        enrich_limit=enrich_limit,
         timeout_ms=timeout_ms,
     )
-    # Store additional timeout values for enrichment
-    scraper.screenshot_timeout_ms = screenshot_timeout_ms
-    scraper.content_timeout_ms = content_timeout_ms
-    scraper.element_timeout_ms = element_timeout_ms
+    
     listings = scraper.scrape()
 
     print(f"\nFound {len(listings)} listings")
@@ -1083,5 +503,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 

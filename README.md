@@ -200,6 +200,18 @@ price-tracker/
 ├── api/                   # FastAPI Search API
 │   ├── test_api_integration.sh # API integration tests
 │   └── README.md         # API documentation
+├── scraper/               # eBay Scraper (Playwright-based)
+│   ├── config/           # Configuration management
+│   │   └── settings.py   # Environment variable handling
+│   ├── utils/            # Utility modules
+│   │   ├── bot_detection.py  # Anti-bot detection & evasion
+│   │   └── timeout_manager.py  # Timeout handling
+│   ├── extractors/       # Data extraction modules
+│   │   ├── results_parser.py   # Search results parsing
+│   │   └── listing_enricher.py # Individual listing enrichment
+│   ├── tests/            # Scraper unit tests
+│   ├── playwright_ebay_scraper.py # Main scraper class
+│   └── db.py            # Database operations
 ├── tests/                 # Test documentation
 │   └── README.md         # Integration testing guide
 ├── requirements.txt      # Python dependencies
