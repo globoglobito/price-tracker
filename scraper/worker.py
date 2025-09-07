@@ -111,8 +111,15 @@ class EbayWorker:
                     logger.debug(f"Navigating to: {url}")
                     page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
                     
-                    # Extract detailed listing data directly
-                    self.enricher.extract_listing_data(page, listing_data, 1, 1)
+                    # Extract detailed listing data directly with timeout handling
+                    try:
+                        # Set a page timeout for the extraction
+                        page.set_default_timeout(self.timeout_ms)
+                        self.enricher.extract_listing_data(page, listing_data, 1, 1)
+                    except Exception as extract_error:
+                        logger.warning(f"Extraction failed for listing {listing_id}: {extract_error}")
+                        # Continue with basic data - don't fail the whole process
+                        pass
                     
                     # Immediately upsert enriched data to database
                     try:
