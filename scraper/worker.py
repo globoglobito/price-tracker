@@ -111,7 +111,7 @@ class EbayWorker:
                     logger.debug(f"Navigating to: {url}")
                     page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
                     
-                    # Enrich the listing data
+                    # Extract detailed listing data directly
                     self.enricher.extract_listing_data(page, listing_data, 1, 1)
                     
                     # Immediately upsert enriched data to database
