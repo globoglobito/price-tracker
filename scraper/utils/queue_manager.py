@@ -104,7 +104,7 @@ class QueueManager:
             arguments={
                 'x-dead-letter-exchange': '',
                 'x-dead-letter-routing-key': self.DEAD_LETTER_QUEUE,
-                'x-message-ttl': 1800000,  # 30 minutes TTL
+                'x-message-ttl': 43200000,  # 12 hours TTL
                 'x-max-retries': 3
             }
         )
