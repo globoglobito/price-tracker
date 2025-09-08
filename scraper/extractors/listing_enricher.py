@@ -163,11 +163,15 @@ class ListingEnricher:
                 'div#RightSummaryPanel div.u-flL.iti-eu-bld-gry',
             ]
             for s in loc_sel:
-                el = page.query_selector(s)
-                if el:
-                    location_text = (el.inner_text() or '').strip()
-                    if location_text:
-                        break
+                try:
+                    el = page.query_selector(s)
+                    if el:
+                        location_text = (el.inner_text() or '').strip()
+                        if location_text:
+                            break
+                except Exception as e:
+                    logger.debug(f"DOM query failed for selector {s}: {e}")
+                    continue
             
             if not location_text:
                 # Check timeout before expensive DOM query

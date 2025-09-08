@@ -1,32 +1,26 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ebay-workers
+  name: ebay-collector-selmer-tenor
   namespace: price-tracker
   labels:
-    app: ebay-workers
+    app: ebay-collector
     project: price-tracker
 spec:
-  parallelism: 16  # 16 parallel workers
-  # No completions - worker should process all messages in queue
   ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
   template:
     metadata:
       labels:
-        app: ebay-workers
+        app: ebay-collector
         project: price-tracker
     spec:
       restartPolicy: Never
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
       imagePullSecrets:
         - name: docker-registry-secret
       containers:
-      - name: worker
+      - name: collector
         image: globoglobitos/price-tracker-scraper:latest
-        command: ["python", "/app/scraper/worker.py"]
+        command: ["python", "/app/scraper/collector.py"]
         env:
         # Database connection
         - name: DB_HOST
@@ -62,30 +56,19 @@ spec:
               key: password
         - name: RABBITMQ_VHOST
           value: "price-tracker"
-        # Worker configuration
+        # Scraper configuration
+        - name: SEARCH_TERM
+          value: "Selmer Tenor saxophone"
+        - name: MAX_PAGES
+          value: "3"  # Full test
         - name: HEADLESS
           value: "true"
         - name: BROWSER
           value: "chromium"
-        - name: USER_DATA_DIR
-          value: "/app/local-stuff-ignore/profiles"
-        - name: SNAPSHOT_DIR
-          value: "/app/local-stuff-ignore/snapshots"
+        # - name: USER_DATA_DIR
+        #   value: "/app/local-stuff-ignore/profile-ebay"
         - name: DEBUG_SNAPSHOT_DIR
           value: "/app/local-stuff-ignore/debug"
-        - name: SCREENSHOT_TIMEOUT_MS
-          value: "10000"
-        - name: CONTENT_TIMEOUT_MS
-          value: "5000"
-        # Timeout and retry settings
-        - name: WAIT_ON_PAGE_S
-          value: "8"
-        - name: LISTING_MAX_S
-          value: "45"
-        - name: BLOCK_RECHECK
-          value: "true"
-        - name: BLOCK_MAX_RETRIES
-          value: "3"
         resources:
           requests:
             cpu: "250m"
@@ -96,26 +79,8 @@ spec:
         volumeMounts:
         - name: debug-dir
           mountPath: /app/local-stuff-ignore/debug
-        - name: snapshots-dir
-          mountPath: /app/local-stuff-ignore/snapshots
-        - name: profiles-dir
-          mountPath: /app/local-stuff-ignore/profiles
-        - name: profile-dir
-          mountPath: /app/local-stuff-ignore
       volumes:
       - name: debug-dir
         hostPath:
           path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
-          type: DirectoryOrCreate
-      - name: snapshots-dir
-        hostPath:
-          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/snapshots
-          type: DirectoryOrCreate
-      - name: profiles-dir
-        hostPath:
-          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profiles
-          type: DirectoryOrCreate
-      - name: profile-dir
-        hostPath:
-          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore
           type: DirectoryOrCreate

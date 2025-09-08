@@ -132,6 +132,84 @@ def parse_listing_elements(page: Any) -> List[Dict]:
                 model_match = re.search(r"Y[AT]S?[-\s]?(\d+)", title, re.IGNORECASE)
                 if model_match:
                     model = f"YTS-{model_match.group(1)}"
+            elif "king" in tl:
+                brand = "King"
+                if "super 20" in tl:
+                    if "silversonic" in tl:
+                        model = "Super 20 Silversonic"
+                    else:
+                        model = "Super 20"
+                elif "super 21" in tl:
+                    model = "Super 21"
+                elif "zephyr" in tl:
+                    if "special" in tl:
+                        model = "Zephyr Special"
+                    else:
+                        model = "Zephyr"
+                elif "empire" in tl:
+                    model = "Empire"
+            elif "eastern" in tl:
+                brand = "Eastern Music"
+            elif "ic/" in tl or "precision" in tl:
+                brand = "IC/Precision"
+            elif "conn" in tl:
+                brand = "Conn"
+                if "6m" in tl or "6 m" in tl:
+                    model = "6M"
+                elif "10m" in tl or "10 m" in tl:
+                    model = "10M"
+                elif "new wonder" in tl:
+                    model = "New Wonder"
+                elif "director" in tl:
+                    model = "Director"
+                elif "lady face" in tl:
+                    model = "Lady Face"
+            elif "sml" in tl:
+                brand = "SML"
+            elif "keilwerth" in tl:
+                brand = "Keilwerth"
+                if "sx90" in tl:
+                    model = "SX90"
+                elif "sx90r" in tl:
+                    model = "SX90R"
+                elif "shadow" in tl:
+                    model = "Shadow"
+            elif "couf" in tl:
+                brand = "Couf"
+                if "superba" in tl:
+                    model = "Superba"
+                elif "studio" in tl:
+                    model = "Studio"
+            elif "buffet" in tl:
+                brand = "Buffet"
+                if "super dynaction" in tl:
+                    model = "Super Dynaction"
+                elif "dynaction" in tl:
+                    model = "Dynaction"
+                elif "s1" in tl:
+                    model = "S1"
+            elif "yanagisawa" in tl:
+                brand = "Yanagisawa"
+                if "wo1" in tl or "wo-1" in tl:
+                    model = "WO1"
+                elif "wo2" in tl or "wo-2" in tl:
+                    model = "WO2"
+                elif "wo10" in tl or "wo-10" in tl:
+                    model = "WO10"
+                elif "a991" in tl:
+                    model = "A991"
+                elif "t991" in tl:
+                    model = "T991"
+            elif "martin" in tl:
+                brand = "Martin"
+                if "committee" in tl:
+                    model = "Committee"
+                elif "handcraft" in tl:
+                    model = "Handcraft"
+                elif "indiana" in tl:
+                    model = "Indiana"
+                elif "magna" in tl:
+                    model = "Magna"
 
             if "tenor" in tl:
                 type_info = "Tenor"

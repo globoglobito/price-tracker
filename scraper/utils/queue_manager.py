@@ -9,7 +9,6 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Optional import - will work without pika if not installed
 try:
     import pika
     PIKA_AVAILABLE = True

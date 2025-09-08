@@ -8,8 +8,10 @@ The Price Tracker application requires the following Kubernetes secrets in the `
 
 - `postgres-secret` (required) – PostgreSQL database credentials
 - `docker-registry-secret` (required) – Docker Hub authentication for pulling images
+- `rabbitmq-secret` (required) – RabbitMQ message queue credentials
 - `price-tracker-postgres-credentials` (optional; only if using Bitnami Helm PostgreSQL)
 - `scraper-proxy` (optional) – HTTP/HTTPS proxy for scraper pods if needed
+- `kube-prom-stack-grafana` (auto-created) – Grafana admin credentials for monitoring
 
 ## 🔧 Prerequisites
 
@@ -49,7 +51,13 @@ kubectl create secret generic price-tracker-postgres-credentials \
   --from-literal=password=your_db_password_here \
   -n price-tracker
 
-# 4. Scraper Proxy (optional)
+# 4. RabbitMQ Secret (required)
+kubectl create secret generic rabbitmq-secret \
+  --from-literal=username=admin \
+  --from-literal=password=admin123 \
+  -n price-tracker
+
+# 5. Scraper Proxy (optional)
 kubectl create secret generic scraper-proxy \
   --from-literal=http_proxy=http://user:pass@host:port \
   --from-literal=https_proxy=http://user:pass@host:port \
@@ -75,7 +83,22 @@ kubectl create secret generic postgres-secret \
   -n price-tracker
 ```
 
-### 2. `scraper-proxy` (optional)
+### 2. `rabbitmq-secret` (required)
+**Purpose**: RabbitMQ message queue credentials for the parallel scraping architecture
+**Type**: `generic`
+**Required Fields**:
+- `username`: RabbitMQ username (default: `admin`)
+- `password`: RabbitMQ password (default: `admin123`)
+
+**Example**:
+```bash
+kubectl create secret generic rabbitmq-secret \
+  --from-literal=username=admin \
+  --from-literal=password=MySecureRabbitMQPassword123! \
+  -n price-tracker
+```
+
+### 3. `scraper-proxy` (optional)
 **Purpose**: Provide outbound proxy settings to the scraper pods when required. This is optional and not needed for most environments.
 **Type**: `generic`
 **Fields**:
@@ -84,7 +107,7 @@ kubectl create secret generic postgres-secret \
 
 The CronJob references this secret optionally, so you can skip creating it if you do not need a proxy.
 
-### 3. `docker-registry-secret`
+### 4. `docker-registry-secret`
 **Purpose**: Authentication for pulling Docker images from Docker Hub
 **Type**: `docker-registry`
 **Required Fields**:
@@ -103,7 +126,7 @@ kubectl create secret docker-registry docker-registry-secret \
   -n price-tracker
 ```
 
-### 4. `price-tracker-postgres-credentials`
+### 5. `price-tracker-postgres-credentials`
 **Purpose**: Credentials specifically for the Bitnami PostgreSQL Helm chart
 **Type**: `generic`
 **Required Fields**:
@@ -116,6 +139,24 @@ kubectl create secret generic price-tracker-postgres-credentials \
   --from-literal=postgres-password=MySecurePassword123! \
   --from-literal=password=MySecurePassword123! \
   -n price-tracker
+```
+
+### 6. `kube-prom-stack-grafana` (Auto-created)
+**Purpose**: Grafana admin credentials for monitoring and visualization
+**Type**: `generic` (auto-created by observability stack)
+**Fields**:
+- `admin-password`: Grafana admin password (default: `prom-operator`)
+- `admin-user`: Grafana admin username (default: `admin`)
+
+**Access Grafana**:
+```bash
+# Port forward to access Grafana
+kubectl port-forward -n observability svc/kube-prom-stack-grafana 3000:80
+
+# Access at: http://localhost:3000
+# Username: admin
+# Password: prom-operator (or get from secret)
+kubectl get secret -n observability kube-prom-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d
 ```
 
 ## 🔐 Security Best Practices
@@ -220,6 +261,22 @@ kubectl rollout restart deployment/price-tracker -n price-tracker
    echo "dGVzdA==" | base64 -D  # macOS
    ```
 
+4. **Missing secret keys**:
+   ```bash
+   # Check what keys exist in a secret
+   kubectl describe secret rabbitmq-secret -n price-tracker
+   
+   # If rabbitmq-secret is missing username key, add it:
+   kubectl patch secret rabbitmq-secret -n price-tracker --type='json' -p='[{"op": "add", "path": "/data/username", "value": "YWRtaW4="}]'
+   
+   # Or recreate the secret with both keys:
+   kubectl delete secret rabbitmq-secret -n price-tracker
+   kubectl create secret generic rabbitmq-secret \
+     --from-literal=username=admin \
+     --from-literal=password=admin123 \
+     -n price-tracker
+   ```
+
 ## 📁 Template Files
 
 For convenience, you can save this template and fill in your values:
@@ -278,8 +335,10 @@ kubectl get secrets -n price-tracker
 ## 🎯 Integration with Deployment
 
 These secrets are automatically used by:
-- `k8s/deployment.yaml` - Main application deployment
-- `k8s/manifests/app-deployment.yaml` - Alternative deployment
+- `k8s/api-deployment.yaml` - FastAPI application deployment
+- `k8s/rabbitmq-deployment.yaml` - RabbitMQ message queue deployment
+- `k8s/collector-job.yaml` - Collector job for search results
+- `k8s/worker-job.yaml` - Worker jobs for parallel enrichment
 - `k8s/manifests/db-deployment.yaml` - Database deployment
 - `helm/price-tracker-postgres-values.yaml` - Helm chart values
 

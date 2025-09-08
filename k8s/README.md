@@ -1,6 +1,16 @@
 # Kubernetes Deployment Guide
 
-This directory contains all the Kubernetes manifests and configurations needed to deploy the Price Tracker application on MicroK8s.
+This directory contains all the Kubernetes manifests and configurations needed to deploy the Price Tracker application with its **parallel queue-based architecture** on MicroK8s.
+
+## Architecture Overview
+
+The system now uses a **distributed parallel architecture**:
+
+- **PostgreSQL**: Database for storing listings and search data
+- **FastAPI**: Search API for querying the database
+- **RabbitMQ**: Message queue for distributed processing
+- **Collector Job**: Scrapes eBay search results and queues listings
+- **Worker Jobs**: 16 parallel workers that enrich individual listings
 
 ## Prerequisites
 
@@ -36,8 +46,16 @@ This directory contains all the Kubernetes manifests and configurations needed t
 
 2. **Deploy the application**:
    ```bash
-   kubectl apply -f k8s/deployment.yaml
-   kubectl apply -f k8s/service.yaml
+   # Deploy API
+   kubectl apply -f k8s/api-deployment.yaml
+   kubectl apply -f k8s/api-service.yaml
+   
+   # Deploy RabbitMQ
+   kubectl apply -f k8s/rabbitmq-deployment.yaml
+   
+   # Deploy scraper jobs (suspended by default)
+   kubectl apply -f k8s/collector-job.yaml
+   kubectl apply -f k8s/worker-job.yaml
    ```
 
 ### Option 2: Using Pure Kubernetes Manifests
@@ -81,11 +99,14 @@ kubectl apply -k k8s/
 
 ```
 k8s/
-├── deployment.yaml              # Main application deployment
-├── service.yaml                 # Application service
-├── secrets.yaml                 # Database credentials
-├── configmaps.yaml             # Database init scripts
+├── api-deployment.yaml         # FastAPI application deployment
+├── api-service.yaml            # API service (NodePort 30080)
 ├── postgres-values.yaml        # PostgreSQL config (K8s native)
+├── rabbitmq-deployment.yaml    # RabbitMQ message queue
+├── collector-job.yaml          # Collector job (search results → queue)
+├── worker-job.yaml             # Worker job (16 parallel enrichment workers)
+├── secrets.yaml                # Database and queue credentials
+├── configmaps.yaml             # Database init scripts
 ├── kustomization.yaml          # Kustomize configuration
 └── manifests/
     ├── app-deployment.yaml     # Alternative app deployment
@@ -111,7 +132,7 @@ The database is configured with:
 
 ### Application Configuration
 
-Environment variables:
+**API Environment variables:**
 - `DB_HOST`: Database service hostname
 - `DB_PORT`: Database port (5432)
 - `DB_NAME`: Database name
@@ -119,7 +140,16 @@ Environment variables:
 - `DB_PASSWORD`: Database password (from secret)
 - `ENVIRONMENT`: deployment environment (development)
 - `LOG_LEVEL`: Application log level (INFO)
-- `SCRAPE_INTERVAL`: Scraping interval in seconds (3600)
+
+**Scraper Environment variables:**
+- `RABBITMQ_HOST`: RabbitMQ service hostname
+- `RABBITMQ_PORT`: RabbitMQ port (5672)
+- `RABBITMQ_USERNAME`: RabbitMQ username (from `rabbitmq-secret`)
+- `RABBITMQ_PASSWORD`: RabbitMQ password (from `rabbitmq-secret`)
+- `RABBITMQ_VHOST`: RabbitMQ virtual host (default: "price-tracker")
+- `WORKER_PARALLELISM`: Number of parallel workers (default: 16)
+- `SEARCH_TERM`: eBay search term (default: "Selmer Mark VI")
+- `MAX_PAGES`: Maximum pages to scrape (default: 0 = unlimited)
 
 ## Accessing the Application
 
@@ -134,6 +164,48 @@ Environment variables:
    ```
 
 3. **Access at**: `http://localhost:8080`
+
+## Running the Scraper
+
+### Manual Job Execution
+
+1. **Run collector job** (scrapes search results and queues listings):
+   ```bash
+   kubectl create job --from=cronjob/ebay-collector ebay-collector-test-$(date +%s)
+   ```
+
+2. **Run worker jobs** (16 parallel workers for enrichment):
+   ```bash
+   kubectl create job --from=cronjob/ebay-workers ebay-workers-test-$(date +%s)
+   ```
+
+3. **View job logs**:
+   ```bash
+   # Collector logs
+   kubectl logs -l job-name=ebay-collector-test-<timestamp>
+   
+   # Worker logs
+   kubectl logs -l job-name=ebay-workers-test-<timestamp>
+   ```
+
+4. **Check queue status**:
+   ```bash
+   kubectl exec deployment/rabbitmq -- rabbitmqctl list_queues
+   ```
+
+### Scheduled Execution
+
+1. **Enable scheduled runs**:
+   ```bash
+   kubectl patch cronjob ebay-collector -p '{"spec":{"suspend":false}}'
+   kubectl patch cronjob ebay-workers -p '{"spec":{"suspend":false}}'
+   ```
+
+2. **Disable scheduled runs**:
+   ```bash
+   kubectl patch cronjob ebay-collector -p '{"spec":{"suspend":true}}'
+   kubectl patch cronjob ebay-workers -p '{"spec":{"suspend":true}}'
+   ```
 
 ## Database Access
 
@@ -152,7 +224,7 @@ Environment variables:
 
 1. **View application logs**:
    ```bash
-   kubectl logs -f deployment/price-tracker
+   kubectl logs -f deployment/price-tracker-api
    ```
 
 2. **View database logs**:
@@ -160,12 +232,32 @@ Environment variables:
    kubectl logs -f deployment/postgres
    ```
 
-3. **Check resource usage**:
+3. **View RabbitMQ logs**:
+   ```bash
+   kubectl logs -f deployment/rabbitmq
+   ```
+
+4. **Check resource usage**:
    ```bash
    kubectl top pods
    ```
 
-4. **Describe resources for troubleshooting**:
+5. **Monitor queue status**:
+   ```bash
+   kubectl exec deployment/rabbitmq -- rabbitmqctl list_queues
+   kubectl exec deployment/rabbitmq -- rabbitmqctl list_connections
+   ```
+
+6. **Troubleshoot secret issues**:
+   ```bash
+   # Check if secrets exist and have required keys
+   kubectl describe secret rabbitmq-secret -n price-tracker
+   
+   # If rabbitmq-secret is missing username key (common issue):
+   kubectl patch secret rabbitmq-secret -n price-tracker --type='json' -p='[{"op": "add", "path": "/data/username", "value": "YWRtaW4="}]'
+   ```
+
+7. **Describe resources for troubleshooting**:
    ```bash
    kubectl describe pod <pod-name>
    kubectl describe service <service-name>

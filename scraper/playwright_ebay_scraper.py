@@ -22,7 +22,6 @@ import time
 import random
 import pathlib
 
-# Import extracted utilities
 from scraper.config import settings
 from scraper.utils.bot_detection import is_block_page, save_debug_snapshot
 from scraper.utils.timeout_manager import TimeoutManager
@@ -475,7 +474,7 @@ def main() -> None:
     snapshot_dir = settings.get_snapshot_dir()
     enrich_limit = settings.get_enrich_limit()
     timeout_ms = settings.get_timeout_ms()
-    
+
     scraper = EbayBrowserScraper(
         search_term=search_term,
         max_pages=max_pages,

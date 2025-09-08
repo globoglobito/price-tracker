@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented here.
 
+## [v0.3.0] - 2025-01-09
+
+### 🚀 **Parallel Architecture Implementation**
+- **Queue-Based Processing**: Implemented RabbitMQ message queue for distributed scraping
+- **Collector/Worker Separation**: Split scraper into two distinct components:
+  - **Collector Job**: Scrapes eBay search results and queues listings for enrichment
+  - **Worker Jobs**: 16 parallel workers that enrich individual listings with detailed data
+- **High-Performance Processing**: 16x parallelization for listing enrichment
+- **Message Queue Integration**: RabbitMQ handles queuing, distribution, and retry logic
+- **Dead Letter Queue**: Failed messages are routed to DLQ for analysis and retry
+
+### 🔧 **Infrastructure Improvements**
+- **RabbitMQ Deployment**: Added RabbitMQ message broker to Kubernetes cluster
+- **Worker Parallelism**: Configurable worker count (default: 16 workers)
+- **Queue Management**: Comprehensive queue monitoring and statistics
+- **Message Persistence**: Durable message storage with TTL and retry policies
+- **Resource Optimization**: Better resource utilization across multiple workers
+
+### 🧪 **Testing Enhancements**
+- **Comprehensive Test Suite**: Added 21 new unit tests for collector, worker, and queue manager
+- **Test Coverage**: 43 total tests covering all major components
+- **Mock Infrastructure**: Robust mocking for Playwright, RabbitMQ, and database operations
+- **Integration Testing**: End-to-end testing of parallel architecture flow
+
+### 📚 **Documentation Updates**
+- **Architecture Documentation**: Updated README with parallel architecture details
+- **Deployment Guides**: Updated deployment instructions for collector/worker jobs
+- **Queue Management**: Added RabbitMQ configuration and monitoring documentation
+- **Performance Metrics**: Documented 16-worker parallel processing capabilities
+
 ## [v0.2.0] - 2025-01-08
 
 ### 🔧 **Major Refactoring**

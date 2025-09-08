@@ -13,7 +13,6 @@ import os
 import sys
 from typing import List, Dict, Any
 
-# Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scraper.playwright_ebay_scraper import EbayBrowserScraper

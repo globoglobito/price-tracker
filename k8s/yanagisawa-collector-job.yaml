@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yanagisawa-collector
+  namespace: price-tracker
+spec:
+  template:
+    metadata:
+      labels:
+        app: yanagisawa-collector
+    spec:
+      containers:
+      - name: yanagisawa-collector
+        image: price-tracker-scraper:latest
+        command: ["python", "-m", "scraper.collector"]
+        env:
+        - name: USER_DATA_DIR
+          value: "/app/local-stuff-ignore/profiles"
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: password
+        - name: RABBITMQ_VHOST
+          value: "price-tracker"
+        - name: SEARCH_TERMS
+          value: "Yanagisawa saxophone,Yanagisawa WO1,Yanagisawa WO2,Yanagisawa WO10,Yanagisawa A991,Yanagisawa T991"
+        - name: MAX_PAGES
+          value: "10"
+        volumeMounts:
+        - name: profiles-dir
+          mountPath: /app/local-stuff-ignore/profiles
+      volumes:
+      - name: profiles-dir
+        hostPath:
+          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profiles
+          type: DirectoryOrCreate
+      restartPolicy: Never
+  backoffLimit: 3

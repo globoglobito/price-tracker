@@ -45,7 +45,10 @@ spec:
         - name: RABBITMQ_PORT
           value: "5672"
         - name: RABBITMQ_USERNAME
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: username
         - name: RABBITMQ_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -57,13 +60,13 @@ spec:
         - name: SEARCH_TERM
           value: "Selmer Mark VI"
         - name: MAX_PAGES
-          value: "3"  # Limit for testing
+          value: "3"  # Full test
         - name: HEADLESS
           value: "true"
         - name: BROWSER
           value: "chromium"
-        - name: USER_DATA_DIR
-          value: "/app/local-stuff-ignore/profile-ebay"
+        # - name: USER_DATA_DIR
+        #   value: "/app/local-stuff-ignore/profile-ebay"
         - name: DEBUG_SNAPSHOT_DIR
           value: "/app/local-stuff-ignore/debug"
         resources:
@@ -76,14 +79,8 @@ spec:
         volumeMounts:
         - name: debug-dir
           mountPath: /app/local-stuff-ignore/debug
-        - name: profile-dir
-          mountPath: /app/local-stuff-ignore/profile-ebay
       volumes:
       - name: debug-dir
         hostPath:
           path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
-          type: DirectoryOrCreate
-      - name: profile-dir
-        hostPath:
-          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
           type: DirectoryOrCreate
