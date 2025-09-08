@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: conn-collector
-        image: price-tracker-scraper:latest
+        image: docker.io/globoglobitos/price-tracker-scraper:latest
         command: ["python", "-m", "scraper.collector"]
         env:
         - name: USER_DATA_DIR
@@ -32,10 +32,10 @@ spec:
               key: password
         - name: RABBITMQ_VHOST
           value: "price-tracker"
-        - name: SEARCH_TERMS
-          value: "Conn saxophone,Conn 6M,Conn 10M,Conn New Wonder,Conn Director,Conn Lady Face"
+        - name: SEARCH_TERM
+          value: "Conn Saxophone"
         - name: MAX_PAGES
-          value: "10"
+          value: "6"
         volumeMounts:
         - name: profiles-dir
           mountPath: /app/local-stuff-ignore/profiles
