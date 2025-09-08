@@ -38,7 +38,7 @@ class EbayCollector:
         if base_user_data_dir:
             import os
             worker_id = os.environ.get('HOSTNAME', 'collector')
-            self.user_data_dir = f"{base_user_data_dir}-{worker_id}"
+            self.user_data_dir = f"{base_user_data_dir}/{worker_id}"
         else:
             self.user_data_dir = None
         self.slow_mo_ms = settings.get_slow_mo_ms()
