@@ -386,14 +386,6 @@ kubectl delete namespace price-tracker
 # Then recreate secrets and redeploy
 ```
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run integration tests: `./database/test_integration.sh` and `./api/test_api_integration.sh`
-5. Submit a pull request
-
 ## 📖 Documentation
 
 - **[Architecture Overview](docs/ARCHITECTURE.md)** - Complete system architecture documentation
@@ -407,25 +399,5 @@ kubectl delete namespace price-tracker
 ## 📄 License
 
 This project is licensed under the MIT License.
+This repo was built as a learning experience with no commercial implications.
 
-## 🙋‍♂️ Support
-
-For issues and questions:
-1. Check troubleshooting above
-2. Run the integration tests
-3. Open an issue with logs and steps
-
-## Appendix: Local-only JSONL runs (optional)
-For experimentation without the cluster, there’s a JSONL-based local mode under `local-stuff-ignore/`.
-
-What it does:
-- Collect phase: scrape search results to JSONL and enqueue for enrichment
-- Enrich phase: open listings with Playwright and write `enrichment_latest.jsonl` and `enrichment_history.jsonl`
-
-Run enrich from queue (example):
-```bash
-source venv/bin/activate
-export SEARCH_TERM='Selmer Mark VI' HEADLESS=true ENRICH_LIMIT=0 ENRICH_NAV_MODE=click WARMUP_HOME=true ENRICH_ISOLATION=browser FRESH_PROFILE_PER_LISTING=true WAIT_ON_PAGE_S=8 SLOW_MO_MS=0 LISTING_MAX_S=45 BLOCK_RECHECK=true BLOCK_MAX_RETRIES=3 BLOCK_WAIT_MIN_S=8 BLOCK_WAIT_MAX_S=12 BLOCK_RELOAD=true SNAPSHOT_DIR="$PWD/local-stuff-ignore/snapshots" PYTHONPATH=.
-python local-stuff-ignore/enrich_from_queue.py
-```
-Snapshots and HTML are saved to `local-stuff-ignore/snapshots`. Use this to iterate anti-bot behavior before pushing to the CronJob.
