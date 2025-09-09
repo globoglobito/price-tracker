@@ -7,10 +7,30 @@ An end-to-end price tracking app for musical instruments (e.g., saxophones), bui
 - You want a scraper that avoids bot detection with human-like behavior.
 - You prefer a single repo you can run locally with MicroK8s.
 
-## What you’ll deploy
+## What you'll deploy
 - PostgreSQL (schema + migrations) in MicroK8s
 - FastAPI (read-only) Search API on NodePort 30080
-- A suspended CronJob for the eBay scraper (run on demand)
+- RabbitMQ message queue for distributed processing
+- **Collector Job**: Scrapes eBay search results and queues listings for enrichment
+- **Worker Jobs**: 16 parallel workers that enrich individual listings with detailed data
+
+## 🏗️ Architecture Overview
+
+The system uses a **parallel queue-based architecture** for high-performance data collection:
+
+```
+eBay Search Results → Collector Job → RabbitMQ Queue → 16x Worker Jobs → PostgreSQL Database
+                                                                    ↓
+                                                              FastAPI ← User Queries
+```
+
+**Key Benefits:**
+- **16x Parallelization**: Concurrent listing enrichment for maximum throughput
+- **Queue-based Processing**: Reliable work distribution with retry logic
+- **Scalable Architecture**: Easy to scale workers or add new data sources
+- **Production-ready**: Comprehensive monitoring, logging, and error handling
+
+📊 **[View detailed architecture diagrams →](docs/architecture-diagram.md)**
 
 ## 🚀 Quick Start (Fresh WSL2 + MicroK8s)
 
@@ -51,6 +71,7 @@ Before deploying, you need to create Kubernetes secrets. We provide an interacti
 The script will prompt you for:
 - **Database password** (required)
 - **Docker Hub credentials** (username, password/token, email)
+- **RabbitMQ credentials** (optional, defaults to admin/admin123)
 
 📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
@@ -117,35 +138,70 @@ We provide offline unit tests for the scraper core logic and integration tests f
 # Or run everything with one command
 chmod +x tests/run_all.sh && ./tests/run_all.sh
 ```
-## 🕒 Scraper CronJob
+## 🕒 Parallel Scraper Architecture
 
-- The eBay scraper CronJob is applied by the deployment script and is suspended by default.
-- To run a one-off test without enabling the schedule:
+The scraper now uses a **parallel queue-based architecture** for high-performance data collection:
+
+### **Collector Job** (Search Results → Queue)
+- Scrapes eBay search results pages
+- Extracts listing metadata (title, price, URL)
+- Queues listings for enrichment via RabbitMQ
+- Runs as a Kubernetes Job (suspended CronJob by default)
+
+### **Worker Jobs** (16 Parallel Enrichment Workers)
+- 16 parallel workers process queued listings
+- Each worker enriches individual listings with detailed data
+- Handles bot detection, timeouts, and retry logic
+- Saves enriched data to PostgreSQL
+
+### **Queue Management**
+- RabbitMQ handles message queuing and distribution
+- Dead letter queue for failed messages
+- Automatic retry with exponential backoff
+- Message persistence and durability
+
+### Running the Scraper
 ```bash
-microk8s kubectl -n price-tracker create job --from=cronjob/ebay-scraper ebay-scraper-test-$(date +%s)
+# Run collector job (scrapes search results and queues listings)
+microk8s kubectl -n price-tracker create job --from=cronjob/ebay-collector ebay-collector-test-$(date +%s)
+
+# Run worker jobs (16 parallel workers for enrichment)
+microk8s kubectl -n price-tracker create job --from=cronjob/ebay-workers ebay-workers-test-$(date +%s)
+
+# View collector logs
+microk8s kubectl -n price-tracker logs -l job-name=ebay-collector-test-<timestamp> | cat
+
+# View worker logs
+microk8s kubectl -n price-tracker logs -l job-name=ebay-workers-test-<timestamp> | cat
+
+# Check queue status
+microk8s kubectl -n price-tracker exec deployment/rabbitmq -- rabbitmqctl list_queues
 ```
-- View logs:
+
+### Temporarily enable/disable scheduled runs:
 ```bash
-microk8s kubectl -n price-tracker logs -l job-name=ebay-scraper-test-<timestamp> | cat
-```
-- Temporarily unsuspend/resuspend the CronJob:
-```bash
-microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspend":false}}'
-sleep 5
-microk8s kubectl -n price-tracker patch cronjob ebay-scraper -p '{"spec":{"suspend":true}}'
+# Enable scheduled runs
+microk8s kubectl -n price-tracker patch cronjob ebay-collector -p '{"spec":{"suspend":false}}'
+microk8s kubectl -n price-tracker patch cronjob ebay-workers -p '{"spec":{"suspend":false}}'
+
+# Disable scheduled runs
+microk8s kubectl -n price-tracker patch cronjob ebay-collector -p '{"spec":{"suspend":true}}'
+microk8s kubectl -n price-tracker patch cronjob ebay-workers -p '{"spec":{"suspend":true}}'
 ```
 
 ### Persistent mounts (MicroK8s)
-- For convenience in MicroK8s, the CronJob mounts host paths under `/var/snap/microk8s/common/price-tracker`:
+- For convenience in MicroK8s, the Jobs mount host paths under `/var/snap/microk8s/common/price-tracker`:
   - Debug snapshots: `/var/snap/microk8s/common/price-tracker/debug` (ENV `DEBUG_SNAPSHOT_DIR=/tmp/debug`)
   - Listing snapshots: `/var/snap/microk8s/common/price-tracker/snapshots` (ENV `SNAPSHOT_DIR=/tmp/snapshots`)
   - Browser profile: `/var/snap/microk8s/common/price-tracker/profile-ebay` (ENV `USER_DATA_DIR=/tmp/profile-ebay`)
-  These paths are configured in `k8s/cronjob-scraper.yaml` and persist across Jobs.
+  These paths are configured in `k8s/collector-job.yaml` and `k8s/worker-job.yaml` and persist across Jobs.
 
 ### Scraper configuration
-- The scraper reads DB connection from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (wired from `postgres-secret`).
-- Proxy is optional. If needed, create `scraper-proxy` with `http_proxy` and `https_proxy` keys. If not present, the scraper runs without proxy.
-- Override search parameters by editing `k8s/cronjob-scraper.yaml` or creating a one-off job and piping modified YAML.
+- **Database**: Reads connection from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (wired from `postgres-secret`)
+- **Queue**: RabbitMQ connection via `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`
+- **Proxy**: Optional. If needed, create `scraper-proxy` with `http_proxy` and `https_proxy` keys
+- **Search parameters**: Override by editing `k8s/collector-job.yaml` or `k8s/worker-job.yaml`
+- **Worker parallelism**: Configured via `WORKER_PARALLELISM` (default: 16 workers)
 
 ### Browser Profile & Bot Detection Avoidance
 - **Critical**: The scraper uses `USER_DATA_DIR=/tmp/profile-ebay` to maintain a persistent browser profile during scraping sessions
@@ -190,6 +246,9 @@ price-tracker/
 │   ├── api-deployment.yaml # API deployment
 │   ├── api-service.yaml   # API service
 │   ├── postgres-values.yaml # PostgreSQL configuration
+│   ├── collector-job.yaml # Collector job (search results → queue)
+│   ├── worker-job.yaml    # Worker job (16 parallel enrichment workers)
+│   ├── rabbitmq-deployment.yaml # RabbitMQ message queue
 │   └── manifests/        # Deployment configs
 │       └── db-deployment.yaml  # Database deployment
 ├── database/              # Database schema and tests
@@ -200,6 +259,18 @@ price-tracker/
 ├── api/                   # FastAPI Search API
 │   ├── test_api_integration.sh # API integration tests
 │   └── README.md         # API documentation
+├── scraper/               # eBay Scraper (Playwright-based)
+│   ├── config/           # Configuration management
+│   │   └── settings.py   # Environment variable handling
+│   ├── utils/            # Utility modules
+│   │   ├── bot_detection.py  # Anti-bot detection & evasion
+│   │   └── timeout_manager.py  # Timeout handling
+│   ├── extractors/       # Data extraction modules
+│   │   ├── results_parser.py   # Search results parsing
+│   │   └── listing_enricher.py # Individual listing enrichment
+│   ├── tests/            # Scraper unit tests
+│   ├── playwright_ebay_scraper.py # Main scraper class
+│   └── db.py            # Database operations
 ├── tests/                 # Test documentation
 │   └── README.md         # Integration testing guide
 ├── requirements.txt      # Python dependencies
@@ -325,7 +396,11 @@ kubectl delete namespace price-tracker
 
 ## 📖 Documentation
 
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - Complete system architecture documentation
+- **[Architecture Diagram](docs/architecture-diagram.md)** - Visual system architecture diagram
+- **[Component Diagram](docs/component-diagram.md)** - Simplified component relationships
 - **[Secrets Setup Guide](docs/SECRETS.md)** - Complete secrets configuration
+- **[Monitoring Guide](docs/MONITORING.md)** - Grafana, Prometheus, and observability
 - **[Integration Tests](tests/README.md)** - Testing documentation
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
 

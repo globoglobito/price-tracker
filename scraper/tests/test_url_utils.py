@@ -1,4 +1,5 @@
-from scraper.playwright_ebay_scraper import EbayBrowserScraper, _extract_price_from_text
+from scraper.playwright_ebay_scraper import EbayBrowserScraper
+from scraper.extractors.results_parser import extract_price_from_text
 
 
 def test_clean_ebay_url():
@@ -11,9 +12,9 @@ def test_clean_ebay_url():
 
 def test_extract_price():
     print("[test] Price extraction: parses US/UK formats; returns None when absent")
-    assert _extract_price_from_text("US $1,299.00") == 1299.00
-    assert _extract_price_from_text("£1,299") == 1299.00
-    assert _extract_price_from_text("No price") is None
+    assert extract_price_from_text("US $1,299.00") == 1299.00
+    assert extract_price_from_text("£1,299") == 1299.00
+    assert extract_price_from_text("No price") is None
 
 
 

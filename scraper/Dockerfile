@@ -19,7 +19,6 @@ ENV HEADLESS=true \
 # Non-root already configured in base image (user pwuser)
 USER pwuser
 
-# Run the scraper as a module so package imports (scraper.db) work
 CMD ["python", "-m", "scraper.playwright_ebay_scraper"]
 
 

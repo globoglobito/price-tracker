@@ -18,6 +18,7 @@ echo "This script will help you create all required Kubernetes secrets."
 echo "You'll be prompted for the following information:"
 echo "  - Database password"
 echo "  - Docker Hub credentials (username, password/token, email)"
+echo "  - RabbitMQ credentials (optional, defaults to admin/admin123)"
 echo ""
 
 # Use microk8s kubectl for all operations
@@ -53,7 +54,17 @@ read -s -p "Docker Hub password/token: " DOCKERHUB_PASSWORD
 echo ""
 read -p "Docker Hub email: " DOCKERHUB_EMAIL
 
+# Prompt for RabbitMQ credentials (optional)
+echo ""
+echo -e "${YELLOW}🐰 RabbitMQ Credentials (optional)${NC}"
+echo "Press Enter to use defaults (admin/admin123) or provide custom credentials:"
+read -p "RabbitMQ username [admin]: " RABBITMQ_USERNAME
+read -s -p "RabbitMQ password [admin123]: " RABBITMQ_PASSWORD
+echo ""
 
+# Set defaults if empty
+RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-admin}
+RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-admin123}
 
 echo ""
 echo -e "${YELLOW}🚀 Creating Kubernetes secrets...${NC}"
@@ -82,6 +93,13 @@ echo "Creating price-tracker-postgres-credentials..."
 $KUBECTL create secret generic price-tracker-postgres-credentials \
   --from-literal=username=admin \
   --from-literal=password="$DB_PASSWORD" \
+  -n price-tracker
+
+# Create rabbitmq-secret
+echo "Creating rabbitmq-secret..."
+$KUBECTL create secret generic rabbitmq-secret \
+  --from-literal=username="$RABBITMQ_USERNAME" \
+  --from-literal=password="$RABBITMQ_PASSWORD" \
   -n price-tracker
 
 echo ""

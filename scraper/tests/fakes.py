@@ -28,6 +28,10 @@ class FakePage:
     def __init__(self, html: str):
         self._soup = BeautifulSoup(html or "", "lxml")
 
+    def set_default_timeout(self, timeout_ms: int) -> None:
+        """Mock implementation of set_default_timeout for testing."""
+        pass
+
     def is_visible(self, selector: str) -> bool:
         return len(self._soup.select(selector)) > 0
 

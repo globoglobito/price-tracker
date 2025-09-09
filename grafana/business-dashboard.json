@@ -1,0 +1,1113 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 29,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 9,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "displayLabels": [
+          "name"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COALESCE(type, 'Unknown') as metric,\n  COUNT(*) as value\nFROM price_tracker.listings\nGROUP BY type\nORDER BY value DESC",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Saxophone Types Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#BA43A9",
+                "value": 5
+              },
+              {
+                "color": "#EF843C",
+                "value": 10
+              },
+              {
+                "color": "#E24D42",
+                "value": 20
+              },
+              {
+                "color": "#1F78C1",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              },
+              {
+                "color": "#EAB839",
+                "value": 90
+              },
+              {
+                "color": "#6ED0E0",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 15,
+        "x": 9,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "field": "count",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.4,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "field": "count",
+                  "fixed": 5,
+                  "max": 100,
+                  "min": 20
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "geohash": "country_code",
+              "lookup": "country_code",
+              "mode": "lookup"
+            },
+            "name": "Layer 1",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "zero",
+          "lat": 0,
+          "lon": 0,
+          "zoom": 1
+        }
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  CASE \n    WHEN seller_location IS NULL OR seller_location = '' THEN 'Unknown'\n    WHEN LOWER(seller_location) LIKE '%usa%' OR LOWER(seller_location) LIKE '%united states%' OR LOWER(seller_location) LIKE '%america%' THEN 'US'\n    WHEN LOWER(seller_location) LIKE '%japan%' OR LOWER(seller_location) LIKE '%tokyo%' OR LOWER(seller_location) LIKE '%osaka%' OR LOWER(seller_location) LIKE '%aichi%' OR LOWER(seller_location) LIKE '%fukui%' OR LOWER(seller_location) LIKE '%hyogo%' OR LOWER(seller_location) LIKE '%kagoshima%' OR LOWER(seller_location) LIKE '%kanagawa%' OR LOWER(seller_location) LIKE '%akihabara%' THEN 'JP'\n    WHEN LOWER(seller_location) LIKE '%china%' OR LOWER(seller_location) LIKE '%beijing%' OR LOWER(seller_location) LIKE '%hebei%' OR LOWER(seller_location) LIKE '%hengshui%' OR LOWER(seller_location) LIKE '%wuqiang%' THEN 'CN'\n    WHEN LOWER(seller_location) LIKE '%netherlands%' OR LOWER(seller_location) LIKE '%holland%' OR LOWER(seller_location) LIKE '%amsterdam%' OR LOWER(seller_location) LIKE '%edam%' THEN 'NL'\n    WHEN LOWER(seller_location) LIKE '%canada%' OR LOWER(seller_location) LIKE '%alberta%' OR LOWER(seller_location) LIKE '%manitoba%' OR LOWER(seller_location) LIKE '%quebec%' OR LOWER(seller_location) LIKE '%saskatchewan%' OR LOWER(seller_location) LIKE '%victoria%' OR LOWER(seller_location) LIKE '%winnipeg%' OR LOWER(seller_location) LIKE '%calgary%' OR LOWER(seller_location) LIKE '%laval%' OR LOWER(seller_location) LIKE '%regina%' THEN 'CA'\n    WHEN LOWER(seller_location) LIKE '%australia%' THEN 'AU'\n    WHEN LOWER(seller_location) LIKE '%italy%' OR LOWER(seller_location) LIKE '%toscano%' OR LOWER(seller_location) LIKE '%nave%' OR LOWER(seller_location) LIKE '%plesio%' OR LOWER(seller_location) LIKE '%trecate%' THEN 'IT'\n    WHEN LOWER(seller_location) LIKE '%united kingdom%' OR LOWER(seller_location) LIKE '%uk%' OR LOWER(seller_location) LIKE '%britain%' OR LOWER(seller_location) LIKE '%scotland%' OR LOWER(seller_location) LIKE '%ayrshire%' OR LOWER(seller_location) LIKE '%kilmarnock%' THEN 'GB'\n    WHEN LOWER(seller_location) LIKE '%germany%' OR LOWER(seller_location) LIKE '%dresden%' THEN 'DE'\n    WHEN LOWER(seller_location) LIKE '%greece%' THEN 'GR'\n    ELSE 'Other'\n  END as country_code,\n  COUNT(*) as count\nFROM price_tracker.listings \nWHERE seller_location IS NOT NULL AND seller_location != ''\nGROUP BY country_code\nORDER BY count DESC;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Listings by Country (Detailed)",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#BA43A9",
+                "value": 5
+              },
+              {
+                "color": "#EF843C",
+                "value": 10
+              },
+              {
+                "color": "#E24D42",
+                "value": 20
+              },
+              {
+                "color": "#1F78C1",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              },
+              {
+                "color": "#EAB839",
+                "value": 90
+              },
+              {
+                "color": "#6ED0E0",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 9,
+        "y": 13
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) as total_listings FROM price_tracker.listings",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Total Listings",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1000
+              },
+              {
+                "color": "#EF843C",
+                "value": 1300
+              },
+              {
+                "color": "#1F78C1",
+                "value": 1400
+              },
+              {
+                "color": "#6ED0E0",
+                "value": 2000
+              },
+              {
+                "color": "#E24D42",
+                "value": 4500
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 13
+      },
+      "id": 9,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "colorByField": "avg_price",
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  brand,\n  AVG(price) as avg_price\nFROM price_tracker.listings\nWHERE scraped_at >= NOW() - INTERVAL '24 hours'\n  AND brand IS NOT NULL\n  AND brand != ''\n  AND currency = 'USD'\nGROUP BY brand\nORDER BY avg_price DESC\nLIMIT 10",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Average Price by Brand",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metric"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 188
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 6,
+        "x": 18,
+        "y": 13
+      },
+      "id": 13,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  CASE \n    WHEN LOWER(title) LIKE '%mark vi%' OR LOWER(title) LIKE '%mark 6%' THEN 'Mark VI'\n    WHEN LOWER(title) LIKE '%mark vii%' OR LOWER(title) LIKE '%mark 7%' THEN 'Mark VII'\n    WHEN LOWER(title) LIKE '%balanced action%' OR LOWER(title) LIKE '%sba%' THEN 'Balanced Action'\n    WHEN LOWER(title) LIKE '%super action 80%' OR LOWER(title) LIKE '%sa80%' THEN 'Super Action 80'\n    WHEN LOWER(title) LIKE '%series iii%' OR LOWER(title) LIKE '%serie iii%' THEN 'Series III'\n    WHEN LOWER(title) LIKE '%bundy%' THEN 'Bundy'\n    WHEN LOWER(title) LIKE '%reference%' THEN 'Reference Series'\n    WHEN LOWER(title) LIKE '%signature%' THEN 'Signature'\n    WHEN LOWER(title) LIKE '%lavoix%' THEN 'LaVoix'\n    WHEN LOWER(title) LIKE '%supreme%' THEN 'Supreme'\n    WHEN LOWER(title) LIKE '%signet%' THEN 'Signet'\n    WHEN LOWER(title) LIKE '%50j%' THEN '50J Series'\n    WHEN LOWER(title) LIKE '%54 axos%' THEN '54 Axos'\n    WHEN LOWER(title) LIKE '%senzo%' THEN 'Senzo'\n    WHEN LOWER(title) LIKE '%buescher%' THEN 'Buescher'\n    WHEN LOWER(title) LIKE '%aristocrat%' THEN 'Aristocrat'\n    WHEN LOWER(title) LIKE '%true tone%' THEN 'True Tone'\n    WHEN LOWER(title) LIKE '%c melody%' OR LOWER(title) LIKE '%c-melody%' THEN 'C Melody'\n    WHEN LOWER(title) LIKE '%zephyr special%' THEN 'Zephyr Special'\n    WHEN LOWER(title) LIKE '%zephyr%' THEN 'Zephyr'\n    WHEN LOWER(title) LIKE '%super 20%' OR LOWER(title) LIKE '%super20%' THEN 'Super 20'\n    WHEN LOWER(title) LIKE '%new wonder%' THEN 'New Wonder'\n    WHEN LOWER(title) LIKE '%6m%' AND LOWER(title) NOT LIKE '%mouthpiece%' THEN '6M'\n    WHEN LOWER(title) LIKE '%10m%' AND LOWER(title) NOT LIKE '%mouthpiece%' THEN '10M'\n    WHEN LOWER(title) LIKE '%shooting star%' THEN 'Shooting Star'\n    WHEN LOWER(title) LIKE '%chu berry%' THEN 'Chu Berry'\n    WHEN LOWER(title) LIKE '%voll-true%' OR LOWER(title) LIKE '%volltrue%' THEN 'Voll-True'\n    WHEN LOWER(title) LIKE '%constellation%' THEN 'Constellation'\n    WHEN LOWER(title) LIKE '%empire%' THEN 'Empire'\n    WHEN LOWER(title) LIKE '%tempo%' THEN 'Tempo'\n    WHEN LOWER(title) LIKE '%lemaire%' THEN 'Lemaire'\n    WHEN LOWER(title) LIKE '%super dynaction%' THEN 'Super Dynaction'\n    WHEN LOWER(title) LIKE '%dynaction%' THEN 'Dynaction'\n    WHEN LOWER(title) LIKE '%prestige%' THEN 'Prestige'\n    WHEN LOWER(title) LIKE '%s1%' THEN 'S1'\n    WHEN LOWER(title) LIKE '%s2%' THEN 'S2'\n    WHEN LOWER(title) LIKE '%400%' AND LOWER(title) LIKE '%series%' THEN '400 Series'\n    WHEN LOWER(title) LIKE '%sa 18-20%' THEN 'SA 18-20'\n    ELSE 'Other'\n  END as metric,\n  COUNT(*) as value\nFROM price_tracker.listings \nGROUP BY \n  CASE \n    WHEN LOWER(title) LIKE '%mark vi%' OR LOWER(title) LIKE '%mark 6%' THEN 'Mark VI'\n    WHEN LOWER(title) LIKE '%mark vii%' OR LOWER(title) LIKE '%mark 7%' THEN 'Mark VII'\n    WHEN LOWER(title) LIKE '%balanced action%' OR LOWER(title) LIKE '%sba%' THEN 'Balanced Action'\n    WHEN LOWER(title) LIKE '%super action 80%' OR LOWER(title) LIKE '%sa80%' THEN 'Super Action 80'\n    WHEN LOWER(title) LIKE '%series iii%' OR LOWER(title) LIKE '%serie iii%' THEN 'Series III'\n    WHEN LOWER(title) LIKE '%bundy%' THEN 'Bundy'\n    WHEN LOWER(title) LIKE '%reference%' THEN 'Reference Series'\n    WHEN LOWER(title) LIKE '%signature%' THEN 'Signature'\n    WHEN LOWER(title) LIKE '%lavoix%' THEN 'LaVoix'\n    WHEN LOWER(title) LIKE '%supreme%' THEN 'Supreme'\n    WHEN LOWER(title) LIKE '%signet%' THEN 'Signet'\n    WHEN LOWER(title) LIKE '%50j%' THEN '50J Series'\n    WHEN LOWER(title) LIKE '%54 axos%' THEN '54 Axos'\n    WHEN LOWER(title) LIKE '%senzo%' THEN 'Senzo'\n    WHEN LOWER(title) LIKE '%buescher%' THEN 'Buescher'\n    WHEN LOWER(title) LIKE '%aristocrat%' THEN 'Aristocrat'\n    WHEN LOWER(title) LIKE '%true tone%' THEN 'True Tone'\n    WHEN LOWER(title) LIKE '%c melody%' OR LOWER(title) LIKE '%c-melody%' THEN 'C Melody'\n    WHEN LOWER(title) LIKE '%zephyr special%' THEN 'Zephyr Special'\n    WHEN LOWER(title) LIKE '%zephyr%' THEN 'Zephyr'\n    WHEN LOWER(title) LIKE '%super 20%' OR LOWER(title) LIKE '%super20%' THEN 'Super 20'\n    WHEN LOWER(title) LIKE '%new wonder%' THEN 'New Wonder'\n    WHEN LOWER(title) LIKE '%6m%' AND LOWER(title) NOT LIKE '%mouthpiece%' THEN '6M'\n    WHEN LOWER(title) LIKE '%10m%' AND LOWER(title) NOT LIKE '%mouthpiece%' THEN '10M'\n    WHEN LOWER(title) LIKE '%shooting star%' THEN 'Shooting Star'\n    WHEN LOWER(title) LIKE '%chu berry%' THEN 'Chu Berry'\n    WHEN LOWER(title) LIKE '%voll-true%' OR LOWER(title) LIKE '%volltrue%' THEN 'Voll-True'\n    WHEN LOWER(title) LIKE '%constellation%' THEN 'Constellation'\n    WHEN LOWER(title) LIKE '%empire%' THEN 'Empire'\n    WHEN LOWER(title) LIKE '%tempo%' THEN 'Tempo'\n    WHEN LOWER(title) LIKE '%lemaire%' THEN 'Lemaire'\n    WHEN LOWER(title) LIKE '%super dynaction%' THEN 'Super Dynaction'\n    WHEN LOWER(title) LIKE '%dynaction%' THEN 'Dynaction'\n    WHEN LOWER(title) LIKE '%prestige%' THEN 'Prestige'\n    WHEN LOWER(title) LIKE '%s1%' THEN 'S1'\n    WHEN LOWER(title) LIKE '%s2%' THEN 'S2'\n    WHEN LOWER(title) LIKE '%400%' AND LOWER(title) LIKE '%series%' THEN '400 Series'\n    WHEN LOWER(title) LIKE '%sa 18-20%' THEN 'SA 18-20'\n    ELSE 'Other'\n  END\nORDER BY value DESC",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Top Models by Listings Count",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 9,
+        "x": 0,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "displayLabels": [
+          "name"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  brand,\n  COUNT(*) as count\nFROM price_tracker.listings\nwhere brand IS NOT NULL\n  AND brand != ''\nGROUP BY brand\nORDER BY count DESC",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Top Brands by Listings Count",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 9,
+        "y": 18
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT AVG(price) as avg_price FROM price_tracker.listings WHERE  currency = 'USD'",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Average Price",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 2000
+              },
+              {
+                "color": "#6ED0E0",
+                "value": 3000
+              },
+              {
+                "color": "#E24D42",
+                "value": 4000
+              },
+              {
+                "color": "#EF843C",
+                "value": 4200
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 21
+      },
+      "id": 3,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "colorByField": "avg_price",
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COALESCE(type, 'Other') as sax_type,\n  AVG(price) as avg_price\nFROM price_tracker.listings\nwhere currency = 'USD'\nGROUP BY type\nORDER BY avg_price DESC",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Average Price by Saxophone Type",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 9,
+        "y": 22
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT MAX(price) as max_price FROM price_tracker.listings WHERE currency = 'USD'",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Highest Price",
+      "type": "stat"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": [
+    "price-tracker",
+    "business-intelligence",
+    "saxophone-market"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1y",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Saxophone Market Intelligence Dashboard",
+  "uid": "saxophone-market-dashboard",
+  "version": 22,
+  "weekStart": ""
+}
