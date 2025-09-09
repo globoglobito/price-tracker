@@ -1,0 +1,104 @@
+# PostgreSQL Helm Chart Values for Price Tracker
+# Using Bitnami PostgreSQL Chart
+# Optimized for WSL2 environment with Kubernetes secrets
+
+# Global parameters
+global:
+  postgresql:
+    auth:
+      # Use existing secret instead of inline passwords
+      existingSecret: "postgres-secret"
+      secretKeys:
+        adminPasswordKey: "postgres-password"
+        userPasswordKey: "password"
+      username: "price_tracker_user"
+      database: "price_tracker_db"
+
+# PostgreSQL primary configuration
+primary:
+  persistence:
+    enabled: true
+    size: 8Gi
+    # WSL2 optimized storage class
+    storageClass: "microk8s-hostpath"
+    # WSL2 mount options for better performance
+    mountOptions:
+      - rw
+  
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+  
+  # WSL2 optimized PostgreSQL configuration
+  configuration: |
+    # WSL2 performance optimizations
+    shared_buffers = 128MB
+    effective_cache_size = 256MB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # Connection settings
+    max_connections = 100
+    
+    # Logging (for development)
+    log_statement = 'all'
+    log_destination = 'stderr'
+    logging_collector = on
+
+# Authentication - use secrets
+auth:
+  enablePostgresUser: true
+  # Reference the secret instead of inline passwords
+  existingSecret: "postgres-secret"
+  secretKeys:
+    adminPasswordKey: "postgres-password"
+    userPasswordKey: "password"
+  username: "price_tracker_user"
+  database: "price_tracker_db"
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+
+# Metrics (for monitoring)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+  resources:
+    limits:
+      memory: 128Mi
+      cpu: 100m
+    requests:
+      memory: 64Mi
+      cpu: 50m
+
+# Volume permissions (important for WSL2)
+volumePermissions:
+  enabled: true
+  resources:
+    limits:
+      memory: 128Mi
+      cpu: 100m
+    requests:
+      memory: 64Mi
+      cpu: 50m
+
+# Init database scripts (using ConfigMap)
+initdbScriptsConfigMap: "price-tracker-init-scripts"
+
+# WSL2 specific settings
+networkPolicy:
+  enabled: false  # Disabled for local development
+
+# Security context optimized for WSL2
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001

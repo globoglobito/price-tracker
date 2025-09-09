@@ -1,0 +1,86 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ebay-collector
+  namespace: price-tracker
+  labels:
+    app: ebay-collector
+    project: price-tracker
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      labels:
+        app: ebay-collector
+        project: price-tracker
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: docker-registry-secret
+      containers:
+      - name: collector
+        image: globoglobitos/price-tracker-scraper:latest
+        command: ["python", "/app/scraper/collector.py"]
+        env:
+        # Database connection
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "price_tracker_db"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        # RabbitMQ connection
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: password
+        - name: RABBITMQ_VHOST
+          value: "price-tracker"
+        # Scraper configuration
+        - name: SEARCH_TERM
+          value: "Selmer Mark VI"
+        - name: MAX_PAGES
+          value: "3"  # Full test
+        - name: HEADLESS
+          value: "true"
+        - name: BROWSER
+          value: "chromium"
+        # - name: USER_DATA_DIR
+        #   value: "/app/local-stuff-ignore/profile-ebay"
+        - name: DEBUG_SNAPSHOT_DIR
+          value: "/app/local-stuff-ignore/debug"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        volumeMounts:
+        - name: debug-dir
+          mountPath: /app/local-stuff-ignore/debug
+      volumes:
+      - name: debug-dir
+        hostPath:
+          path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
+          type: DirectoryOrCreate

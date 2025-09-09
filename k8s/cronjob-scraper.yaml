@@ -1,0 +1,132 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ebay-scraper
+  namespace: price-tracker
+  labels:
+    app: price-tracker
+    component: scraper
+spec:
+  schedule: "@hourly"
+  suspend: true
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: price-tracker
+            component: scraper
+        spec:
+          securityContext:
+            fsGroup: 1001
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: docker-registry-secret
+          containers:
+            - name: scraper
+              image: docker.io/globoglobitos/price-tracker-scraper:latest
+              imagePullPolicy: Always
+              env:
+                # Database connection (use existing postgres-secret)
+                - name: DB_HOST
+                  value: "postgres-service"
+                - name: DB_PORT
+                  value: "5432"
+                - name: DB_NAME
+                  value: "price_tracker_db"
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_USER
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
+                - name: SEARCH_TERM
+                  value: "Selmer Mark VI"
+                - name: MAX_PAGES
+                  value: "0" # 0 or <=0 means unlimited pages
+                - name: HEADLESS
+                  value: "true"
+                - name: BROWSER
+                  value: "chromium"
+                # Proxy configuration
+                - name: HTTP_PROXY
+                  valueFrom:
+                    secretKeyRef:
+                      name: scraper-proxy
+                      key: http_proxy
+                      optional: true
+                - name: HTTPS_PROXY
+                  valueFrom:
+                    secretKeyRef:
+                      name: scraper-proxy
+                      key: https_proxy
+                      optional: true
+                - name: NO_PROXY
+                  value: ".svc,.cluster.local,localhost,127.0.0.1"
+                # Local persistence for snapshots and browser profile
+                - name: DEBUG_SNAPSHOT_DIR
+                  value: "/app/local-stuff-ignore/debug"
+                - name: SNAPSHOT_DIR
+                  value: "/app/local-stuff-ignore/snapshots"
+                - name: USER_DATA_DIR
+                  value: "/app/local-stuff-ignore/profile-ebay"
+                - name: SLOW_MO_MS
+                  value: "50"
+                - name: MAIN_PAGE_MIN_WAIT_S
+                  value: "6"
+                - name: ENRICH_LIMIT
+                  value: "0" # 0 or <=0 means enrich all
+                - name: ENRICH_NAV_MODE
+                  value: "click"
+                - name: ENRICH_JITTER_MIN_S
+                  value: "8"
+                - name: ENRICH_JITTER_MAX_S
+                  value: "12"
+                - name: WAIT_ON_PAGE_S
+                  value: "8"
+                - name: BLOCK_RECHECK
+                  value: "true"
+                - name: BLOCK_MAX_RETRIES
+                  value: "3"
+                - name: BLOCK_WAIT_MIN_S
+                  value: "8"
+                - name: BLOCK_WAIT_MAX_S
+                  value: "12"
+                - name: LISTING_MAX_S
+                  value: "45"
+              resources:
+                requests:
+                  cpu: "250m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "1Gi"
+              volumeMounts:
+                - name: debug-dir
+                  mountPath: /app/local-stuff-ignore/debug
+                - name: snapshots-dir
+                  mountPath: /app/local-stuff-ignore/snapshots
+                - name: profile-dir
+                  mountPath: /app/local-stuff-ignore/profile-ebay
+
+          volumes:
+            - name: debug-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/debug
+                type: DirectoryOrCreate
+            - name: snapshots-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/snapshots
+                type: DirectoryOrCreate
+            - name: profile-dir
+              hostPath:
+                path: /home/globoglobito/repos/price-tracker/local-stuff-ignore/profile-ebay
+                type: DirectoryOrCreate
+

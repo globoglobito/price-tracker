@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: price-tracker-init-scripts
+  labels:
+    app: postgres
+data:
+  init.sql: |
+    -- Price Tracker Database Initialization Script
+    
+    -- Create extension for UUID generation
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    
+    -- Database is ready for application use
+    -- Tables will be created by the application when data structure is finalized
+    
+    -- Grant permissions to application user
+    GRANT ALL PRIVILEGES ON SCHEMA public TO admin;
+    GRANT USAGE ON SCHEMA public TO admin;
