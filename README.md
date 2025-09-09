@@ -71,7 +71,7 @@ Before deploying, you need to create Kubernetes secrets. We provide an interacti
 The script will prompt you for:
 - **Database password** (required)
 - **Docker Hub credentials** (username, password/token, email)
-- **RabbitMQ credentials** (optional, defaults to admin/admin123)
+- **RabbitMQ credentials**
 
 📖 **[For manual setup, see the complete secrets guide](docs/SECRETS.md)**
 
